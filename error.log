@@ -1,0 +1,14 @@
+node:internal/modules/cjs/loader:1284
+      throw err;
+      ^
+
+Error [ERR_REQUIRE_ESM]: require() of ES Module D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\zeptomatch@2.1.0\node_modules\zeptomatch\dist\index.js from D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\@prisma+dev@0.20.0_typescript@5.9.3\node_modules\@prisma\dev\dist\index.cjs not supported.
+Instead change the require of index.js in D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\@prisma+dev@0.20.0_typescript@5.9.3\node_modules\@prisma\dev\dist\index.cjs to a dynamic import() which is available in all CommonJS modules.
+    at D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\@prisma+dev@0.20.0_typescript@5.9.3\node_modules\@prisma\dev\dist\index.cjs:1:4815
+    at D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\@prisma+dev@0.20.0_typescript@5.9.3\node_modules\@prisma\dev\dist\index.cjs:1:224
+    at Object.<anonymous> (D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\@prisma+dev@0.20.0_typescript@5.9.3\node_modules\@prisma\dev\dist\index.cjs:3:8979)
+    at Object.<anonymous> (D:\E-club\IR\entc-mentorship-portal\node_modules\.pnpm\prisma@7.3.0_@types+react@1_e631fb099ca4450a135f4c9c06831fa0\node_modules\prisma\build\index.js:4139:50) {
+  code: 'ERR_REQUIRE_ESM'
+}
+
+Node.js v20.4.0
