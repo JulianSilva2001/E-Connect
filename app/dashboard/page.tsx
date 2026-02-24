@@ -9,7 +9,7 @@ import { RequestCard } from "@/components/request-card";
 import { AcceptedMenteeCard } from "@/components/accepted-mentee-card";
 import { FeedbackSection } from "@/components/feedback-section";
 import { getMentors, getMentorRequests, processMentorshipRequest, getAcceptedMentees } from "@/actions/mentorship";
-import { getMyFeedbacks, hasAcceptedSession } from "@/actions/feedback";
+import { hasAcceptedSession, getGeneralFeedbacks, getMentorAboutMenteeFeedbacks, getMenteeAboutMentorFeedbacks, getAcceptedMentorsForMentee, getAcceptedMenteesForMentor } from "@/actions/feedback";
 import { User, MenteeProfile } from "@prisma/client";
 import { Target, BookOpen, Clock, Lightbulb, Briefcase, Users, CheckCircle2, Check, X, MessageSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -83,10 +83,19 @@ export default async function DashboardPage() {
     const myMentees = user.role === 'MENTOR' ? await getAcceptedMentees() : [];
 
     // Feedback data — available for both roles
-    const [feedbacks, userHasSession] = await Promise.all([
-        getMyFeedbacks(),
+    const [generalFeedbacks, userHasSession] = await Promise.all([
+        getGeneralFeedbacks(),
         hasAcceptedSession(),
     ]);
+
+    // Role-specific feedback data
+    const targetedFeedbacks = user.role === 'MENTOR'
+        ? await getMentorAboutMenteeFeedbacks()
+        : await getMenteeAboutMentorFeedbacks();
+
+    const targetOptions = user.role === 'MENTOR'
+        ? await getAcceptedMenteesForMentor()
+        : await getAcceptedMentorsForMentee();
 
     return (
         <div className="min-h-screen bg-neutral-50/50 flex flex-col">
@@ -401,7 +410,13 @@ export default async function DashboardPage() {
                                 Share your honest opinions about your mentorship experiences.
                             </p>
                         </div>
-                        <FeedbackSection feedbacks={feedbacks as any} hasSession={userHasSession} />
+                        <FeedbackSection
+                            role={user.role as "MENTOR" | "MENTEE"}
+                            hasSession={userHasSession}
+                            generalFeedbacks={generalFeedbacks as any}
+                            targetedFeedbacks={targetedFeedbacks as any}
+                            targetOptions={targetOptions as any}
+                        />
                     </TabsContent>
                 </Tabs>
             </main>
