@@ -31,16 +31,16 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-b from-primary/90 via-primary/80 to-primary/95 mix-blend-multiply" />
             </div>
             <div className="container mx-auto px-4 relative z-10 text-center">
-              <div className="inline-block px-3 py-1 bg-primary-foreground/10 rounded-full text-sm font-medium mb-6 backdrop-blur-sm border border-primary-foreground/20">
+              <div className="inline-block px-3 py-1 bg-primary-foreground/10 rounded-full text-sm font-medium mb-6 backdrop-blur-sm border border-primary-foreground/20 animate-in fade-in-0 slide-in-from-top-2 duration-700">
                 Department of Electronic & Telecommunication Engineering
               </div>
-              <h1 className="text-4xl md:text-5xl lg:text-7xl font-extrabold mb-6 tracking-tight leading-tight text-balance">
+              <h1 className="text-4xl md:text-5xl lg:text-7xl font-extrabold mb-6 tracking-tight leading-tight text-balance animate-in fade-in-0 slide-in-from-bottom-4 duration-700 delay-150">
                 ENTC Mentorship <br className="hidden md:block" /> Programme
               </h1>
-              <p className="text-lg md:text-xl text-primary-foreground/80 mb-10 max-w-2xl mx-auto leading-relaxed">
+              <p className="text-lg md:text-xl text-primary-foreground/80 mb-10 max-w-2xl mx-auto leading-relaxed animate-in fade-in-0 slide-in-from-bottom-4 duration-700 delay-300">
                 Connecting undergraduates with alumni and industry professionals for career guidance, research mentorship, and professional growth.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center animate-in fade-in-0 slide-in-from-bottom-3 duration-700 delay-500">
                 <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold h-12 px-8 text-base shadow-lg shadow-black/10">
                   <Link href="/register">Get Started</Link>
                 </Button>
@@ -65,16 +65,19 @@ export default function HomePage() {
                 icon={<GraduationCap className="w-8 h-8" />}
                 title="For Undergraduates"
                 description="Identify your career path, find research opportunities, and get personalized advice from seniors who have walked the path."
+                delayClass="delay-100"
               />
               <FeatureCard
                 icon={<Users className="w-8 h-8" />}
                 title="For Mentors"
                 description="Give back to the department, shape the future of engineering talent, and stay connected with the ENTC community."
+                delayClass="delay-200"
               />
               <FeatureCard
                 icon={<Lightbulb className="w-8 h-8" />}
                 title="Knowledge Exchange"
                 description="Facilitate a culture of learning where industry insights and academic innovations meet."
+                delayClass="delay-300"
               />
             </div>
           </section>
@@ -103,9 +106,9 @@ export default function HomePage() {
   )
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
+function FeatureCard({ icon, title, description, delayClass = "" }: { icon: React.ReactNode, title: string, description: string, delayClass?: string }) {
   return (
-    <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1">
+    <div className={`bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1 animate-in fade-in-0 slide-in-from-bottom-4 duration-700 ${delayClass}`}>
       <div className="w-14 h-14 bg-primary/5 text-primary rounded-xl flex items-center justify-center mb-6">
         {icon}
       </div>
