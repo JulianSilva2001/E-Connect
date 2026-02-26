@@ -24,6 +24,7 @@ model User {
 
   mentorProfile MentorProfile?
   menteeProfile MenteeProfile?
+  feedbacks     Feedback[]
 }
 
 model MentorProfile {
@@ -79,4 +80,22 @@ model Selection {
 
   @@unique([menteeId, rank]) // A mentee can only have one mentor per rank
   @@unique([menteeId, mentorId]) // A mentee generally shouldn't pick the same mentor twice? or maybe they can but different ranks? No, usually distinct.
+}
+
+enum FeedbackType {
+  GENERAL
+  MENTOR_ABOUT_MENTEE
+  MENTEE_ABOUT_MENTOR
+}
+
+model Feedback {
+  id        String       @id @default(auto()) @map("_id") @db.ObjectId
+  content   String
+  rating    Int          // 1-5 star rating
+  type      FeedbackType @default(GENERAL)
+  targetId  String?      @db.ObjectId  // userId of the person being reviewed (null for GENERAL)
+  authorId  String       @db.ObjectId
+  author    User         @relation(fields: [authorId], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 }
