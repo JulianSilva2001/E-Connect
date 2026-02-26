@@ -1,64 +1,63 @@
+"use client";
 
-"use client"
-
-import Link from "next/link"
-import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
-import { Menu, X, LogOut } from "lucide-react"
-import { signOut } from "next-auth/react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { Menu, X, LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface NavigationProps {
-  variant?: "home" | "dashboard"
+  variant?: "home" | "dashboard";
   user?: {
-    name?: string | null
-    email?: string | null
-    image?: string | null
-  }
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  };
 }
 
 export function Navigation({ variant = "home", user }: NavigationProps) {
-  const pathname = usePathname()
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-  const [showSignOutModal, setShowSignOutModal] = useState(false)
+  const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   // Add scroll effect
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20)
-    }
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Close modal on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowSignOutModal(false)
-    }
+      if (e.key === "Escape") setShowSignOutModal(false);
+    };
     if (showSignOutModal) {
-      document.addEventListener("keydown", handleKeyDown)
+      document.addEventListener("keydown", handleKeyDown);
     }
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [showSignOutModal])
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showSignOutModal]);
 
-  const isDashboard = variant === "dashboard"
+  const isDashboard = variant === "dashboard";
 
   const handleSignOutClick = () => {
-    setShowSignOutModal(true)
-    setMobileMenuOpen(false)
-  }
+    setShowSignOutModal(true);
+    setMobileMenuOpen(false);
+  };
 
   const handleCancelSignOut = () => {
-    setShowSignOutModal(false)
-  }
+    setShowSignOutModal(false);
+  };
 
   const handleConfirmSignOut = () => {
-    signOut({ callbackUrl: "/" })
-  }
+    signOut({ callbackUrl: "/" });
+  };
 
   return (
     <>
@@ -68,18 +67,20 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
           isDashboard
             ? "sticky top-0 bg-primary shadow-md py-2 border-b border-white/10"
             : cn(
-              "fixed top-0",
-              scrolled
-                ? "bg-primary/95 backdrop-blur-md shadow-lg py-2 border-b border-primary/10"
-                : "bg-transparent py-4 bg-gradient-to-b from-black/50 to-transparent"
-            )
+                "fixed top-0",
+                scrolled
+                  ? "bg-primary/95 backdrop-blur-md shadow-lg py-2 border-b border-primary/10"
+                  : "bg-transparent py-4 bg-gradient-to-b from-black/50 to-transparent",
+              ),
         )}
       >
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-14">
-
             {/* Logos */}
-            <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-4 group animate-in fade-in-0 slide-in-from-top-2 duration-700">
+            <Link
+              href={user ? "/dashboard" : "/"}
+              className="flex items-center gap-2 group animate-in fade-in-0 slide-in-from-top-2 duration-700"
+            >
               {/* ENTC Logo */}
               <div className="bg-white/95 rounded-lg p-1.5 hover:scale-105 transition-transform flex items-center justify-center h-10 w-10 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-700 delay-100">
                 <Image
@@ -95,7 +96,7 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
               <div className="h-8 w-[1px] bg-white/30 hidden sm:block" />
 
               {/* E-Club Logo */}
-              <div className="relative h-10 w-24 hover:scale-105 transition-transform hidden sm:block animate-in fade-in-0 slide-in-from-left-2 duration-700 delay-200">
+              <div className="relative h-10 w-12 hover:scale-105 transition-transform hidden sm:block animate-in fade-in-0 slide-in-from-left-2 duration-700 delay-200">
                 <Image
                   src="/E club white.png"
                   alt="E-Club Logo"
@@ -104,8 +105,25 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
                 />
               </div>
 
+              {/* Divider */}
+              <div className="h-8 w-[1px] bg-white/30 hidden sm:block" />
+
+              {/* E-Connect Logo */}
+              <div className="bg-white/95 rounded-lg p-1.5 h-10 w-10 overflow-hidden hover:scale-105 transition-transform hidden sm:flex items-center justify-center animate-in fade-in-0 slide-in-from-left-2 duration-700 delay-300">
+                <Image
+                  src="/e-connect-logo.png"
+                  alt="E-Connect Logo"
+                  width={40}
+                  height={40}
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
+
               {/* Mobile text backup */}
-              <span className="font-bold text-lg text-white sm:hidden">ENTC Mentorship</span>
+              <span className="font-bold text-lg text-white sm:hidden">
+                ENTC Mentorship
+              </span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -114,7 +132,9 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
                 // Logged In State for Dashboard
                 <div className="flex items-center gap-4">
                   <div className="text-right hidden sm:block">
-                    <p className="text-sm font-bold text-white leading-none">{user.name}</p>
+                    <p className="text-sm font-bold text-white leading-none">
+                      {user.name}
+                    </p>
                     <p className="text-xs text-white/70">{user.email}</p>
                   </div>
                   <div className="h-9 w-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white font-bold">
@@ -156,7 +176,11 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle menu"
             >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
             </button>
           </div>
 
@@ -251,5 +275,5 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
         </div>
       )}
     </>
-  )
+  );
 }
