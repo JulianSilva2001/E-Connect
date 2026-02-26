@@ -1,6 +1,5 @@
-
-import Link from "next/link"
-import Image from "next/image"
+import Link from "next/link";
+import Image from "next/image";
 
 export function Footer() {
   return (
@@ -29,7 +28,8 @@ export function Footer() {
               </div>
             </div>
             <p className="text-sm leading-relaxed max-w-sm text-slate-400">
-              Department of Electronic & Telecommunication Engineering,<br />
+              Department of Electronic & Telecommunication Engineering,
+              <br />
               University of Moratuwa.
             </p>
           </div>
@@ -38,10 +38,35 @@ export function Footer() {
           <div>
             <h4 className="font-semibold text-white mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
-              <li><Link href="/register" className="hover:text-white transition-colors">Register as Mentor</Link></li>
-              <li><Link href="/register" className="hover:text-white transition-colors">Register as Mentee</Link></li>
-              <li><Link href="/login" className="hover:text-white transition-colors">Login</Link></li>
+              <li>
+                <Link href="/" className="hover:text-white transition-colors">
+                  Home
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/register"
+                  className="hover:text-white transition-colors"
+                >
+                  Register as Mentor
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/register"
+                  className="hover:text-white transition-colors"
+                >
+                  Register as Mentee
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/login"
+                  className="hover:text-white transition-colors"
+                >
+                  Login
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -49,18 +74,38 @@ export function Footer() {
           <div>
             <h4 className="font-semibold text-white mb-4">Connect</h4>
             <ul className="space-y-2 text-sm">
-              <li><a href="https://ent.mrt.ac.lk/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Department Website</a></li>
-              <li><a href="https://eclub.mrt.ac.lk/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">E-Club</a></li>
-              <li><a href="https://www.linkedin.com/company/entc-uom/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">LinkedIn</a></li>
+              <li>
+                <a
+                  href="https://ent.uom.lk/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  Department Website
+                </a>
+              </li>
+
+              <li>
+                <a
+                  href="https://www.linkedin.com/company/electronic-club-uom/posts/?feedView=all"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  LinkedIn
+                </a>
+              </li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500">
-          <p>&copy; {new Date().getFullYear()} ENTC E-Club. All rights reserved.</p>
-          <p>Designed  developed by Electronic and Telecommunication Engineering Students.</p>
+          <p>
+            &copy; {new Date().getFullYear()} ENTC E-Club. All rights reserved.
+          </p>
+          <p>Designed and developed by E-Club | University of Moratuwa</p>
         </div>
       </div>
     </footer>
-  )
+  );
 }

@@ -79,9 +79,9 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
           <div className="flex items-center justify-between h-14">
 
             {/* Logos */}
-            <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-4 group">
+            <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-4 group animate-in fade-in-0 slide-in-from-top-2 duration-700">
               {/* ENTC Logo */}
-              <div className="bg-white/95 rounded-lg p-1.5 hover:scale-105 transition-transform flex items-center justify-center h-10 w-10 overflow-hidden">
+              <div className="bg-white/95 rounded-lg p-1.5 hover:scale-105 transition-transform flex items-center justify-center h-10 w-10 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-700 delay-100">
                 <Image
                   src="/ENTC_logo_blue.png"
                   alt="ENTC Logo"
@@ -95,7 +95,7 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
               <div className="h-8 w-[1px] bg-white/30 hidden sm:block" />
 
               {/* E-Club Logo */}
-              <div className="relative h-10 w-24 hover:scale-105 transition-transform hidden sm:block">
+              <div className="relative h-10 w-24 hover:scale-105 transition-transform hidden sm:block animate-in fade-in-0 slide-in-from-left-2 duration-700 delay-200">
                 <Image
                   src="/E club white.png"
                   alt="E-Club Logo"
@@ -103,6 +103,7 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
                   className="object-contain object-left"
                 />
               </div>
+
               {/* Mobile text backup */}
               <span className="font-bold text-lg text-white sm:hidden">ENTC Mentorship</span>
             </Link>

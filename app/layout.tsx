@@ -1,40 +1,35 @@
-import React from "react"
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
-import { Toaster } from "@/components/ui/sonner"
-import './globals.css'
+import React from "react";
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { Toaster } from "@/components/ui/sonner";
+import "./globals.css";
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ENTC Mentorship Portal | University of Moratuwa',
-  description: 'Connect with mentors and mentees in the Department of Electronics & Telecommunication at the University of Moratuwa',
-  generator: 'v0.app',
+  title: "E-Connect",
+  description:
+    "Connect with mentors and mentees in the Department of Electronics & Telecommunication at the University of Moratuwa",
+  generator: "v0.app",
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
+        url: "/E-Connect-logo-small-modified.png",
+        type: "image/png",
+        sizes: "32x32",
       },
     ],
-    apple: '/apple-icon.png',
+    shortcut: "/E-Connect-logo-small-modified.png",
+    apple: "/apple-icon.png",
   },
-}
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -44,6 +39,5 @@ export default function RootLayout({
         <Toaster />
       </body>
     </html>
-  )
+  );
 }
-
