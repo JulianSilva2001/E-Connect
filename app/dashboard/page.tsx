@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import React from "react";
 import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
+import Link from "next/link";
+import { isAdminEmail } from "@/lib/admin";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -110,6 +112,13 @@ export default async function DashboardPage() {
                     <p className="text-muted-foreground text-lg">
                         Manage your mentorship journey and preferences.
                     </p>
+                    {isAdminEmail(user.email) && (
+                        <div className="mt-4">
+                            <Button asChild variant="outline">
+                                <Link href="/admin">Open Admin Panel</Link>
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 <Tabs defaultValue={user.role === 'MENTOR' ? "requests" : "instructions"} className="w-full space-y-8">
