@@ -105,21 +105,6 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
                 />
               </div>
 
-              {/* Divider */}
-              <div className="h-8 w-[1px] bg-white/30 hidden sm:block" />
-
-              {/* E-Connect Logo */}
-              <div className="bg-white/95 rounded-lg p-1.5 h-10 w-10 overflow-hidden hover:scale-105 transition-transform hidden sm:flex items-center justify-center animate-in fade-in-0 slide-in-from-left-2 duration-700 delay-300">
-                <Image
-                  src="/e-connect-logo.png"
-                  alt="E-Connect Logo"
-                  width={40}
-                  height={40}
-                  className="object-contain"
-                  unoptimized
-                />
-              </div>
-
               {/* Mobile text backup */}
               <span className="font-bold text-lg text-white sm:hidden">
                 ENTC Mentorship
