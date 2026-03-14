@@ -83,7 +83,7 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
             >
               <div className="bg-white/95 rounded-xl px-2 py-1.5 hover:scale-105 transition-transform flex items-center justify-center h-12 w-[148px] overflow-hidden animate-in fade-in-0 zoom-in-95 duration-700 delay-100 shadow-sm">
                 <Image
-                  src="/E-Connect-logo.svg"
+                  src="/e-connect-logo.svg"
                   alt="E-Connect Logo"
                   width={132}
                   height={36}
