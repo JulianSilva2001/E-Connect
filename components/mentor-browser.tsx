@@ -3,6 +3,7 @@
 
 import { useState, useMemo } from "react"
 import { MentorCard } from "@/components/mentor-card"
+import { MentorshipModal } from "@/components/mentorship-modal"
 import { Mentor, AvailabilityStatus } from "@/lib/mentors-data"
 import { Search, X, Filter } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -14,10 +15,12 @@ const availabilityFilters: AvailabilityStatus[] = ["Available", "Limited", "Unav
 interface MentorBrowserProps {
     initialMentors: Mentor[]
     selections?: { mentorId: string; rank: number }[]
+    preferencesLocked?: boolean
 }
 
-export function MentorBrowser({ initialMentors, selections = [] }: MentorBrowserProps) {
+export function MentorBrowser({ initialMentors, selections = [], preferencesLocked = false }: MentorBrowserProps) {
     const [mentors] = useState<Mentor[]>(initialMentors)
+    const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null)
 
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedAvailability, setSelectedAvailability] = useState<AvailabilityStatus | null>(null)
@@ -65,6 +68,13 @@ export function MentorBrowser({ initialMentors, selections = [] }: MentorBrowser
 
     return (
         <>
+            <MentorshipModal
+                mentor={selectedMentor}
+                isOpen={!!selectedMentor}
+                onClose={() => setSelectedMentor(null)}
+                selectionRank={selectedMentor ? getSelectionRank(selectedMentor.id) : null}
+                preferencesLocked={preferencesLocked}
+            />
             {/* Search and Filter Section ... */}
             <section className="py-8 bg-background border-b border-border sticky top-16 z-40">
                 {/* Same JSX */}
@@ -167,6 +177,7 @@ export function MentorBrowser({ initialMentors, selections = [] }: MentorBrowser
                                 <MentorCard
                                     key={mentor.id}
                                     mentor={mentor}
+                                    onOpenDetails={setSelectedMentor}
                                     animationDelay={index * 100}
                                     selectionRank={getSelectionRank(mentor.id)}
                                 />

@@ -31,6 +31,7 @@ model MentorProfile {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   userId          String   @unique @db.ObjectId
   user            User     @relation(fields: [userId], references: [id])
+  contactNumber   String?
   bio             String?
   expertise       String[]
   organization    String?
@@ -47,6 +48,8 @@ model MenteeProfile {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   userId          String   @unique @db.ObjectId
   user            User     @relation(fields: [userId], references: [id])
+  contactNumber   String?
+  preferencesSubmitted Boolean @default(false)
   interests       String[]
   batch           String?
   bio             String?

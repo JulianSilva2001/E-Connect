@@ -1,20 +1,19 @@
 
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
-import { X, Building2, GraduationCap, Mail, Linkedin } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { Building2, Mail, Linkedin } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Mentor, AvailabilityStatus } from "@/lib/mentors-data"
 import { cn } from "@/lib/utils"
-import { selectMentor } from "@/actions/mentorship"
 
 interface MentorshipModalProps {
   mentor: Mentor | null
   isOpen: boolean
   onClose: () => void
+  selectionRank?: number | null
+  preferencesLocked?: boolean
 }
 
 function getAvailabilityColor(status: AvailabilityStatus) {
@@ -28,162 +27,101 @@ function getAvailabilityColor(status: AvailabilityStatus) {
   }
 }
 
-export function MentorshipModal({ mentor, isOpen, onClose }: MentorshipModalProps) {
-  const [rank, setRank] = useState<string>("1")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [successMessage, setSuccessMessage] = useState("")
-  const [errorMessage, setErrorMessage] = useState("")
-  const modalRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (isOpen) {
-      setSuccessMessage("")
-      setErrorMessage("")
-    }
-  }, [isOpen])
-
-  // Focus trap and scroll lock code remains similar...
-  useEffect(() => {
-    if (isOpen && modalRef.current) {
-      // ... (simplified for brevity, assume existing focus trap logic or standard dialog behavior)
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    if (isOpen) document.body.style.overflow = "hidden"
-    else document.body.style.overflow = "unset"
-    return () => { document.body.style.overflow = "unset" }
-  }, [isOpen])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!mentor) return
-
-    setIsSubmitting(true)
-    setErrorMessage("")
-
-    // Call Server Action
-    const result = await selectMentor(mentor.id, parseInt(rank));
-
-    setIsSubmitting(false)
-
-    if (result.error) {
-      setErrorMessage(result.error)
-    } else {
-      setSuccessMessage(result.success || "Preference Saved!")
-      setTimeout(() => {
-        onClose()
-      }, 1500)
-    }
-  }
+export function MentorshipModal({ mentor, isOpen, onClose, selectionRank, preferencesLocked = false }: MentorshipModalProps) {
+  const linkedInUrl = mentor?.linkedIn
+    ? mentor.linkedIn.startsWith("http")
+      ? mentor.linkedIn
+      : `https://${mentor.linkedIn}`
+    : null
 
   if (!isOpen || !mentor) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end p-0 sm:p-4">
-      <div
-        className="absolute inset-0 bg-primary/20 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      <div
-        ref={modalRef}
-        role="dialog"
-        className="relative bg-card sm:rounded-l-2xl shadow-2xl w-full max-w-md h-full overflow-y-auto border-l animate-in slide-in-from-right duration-300"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full bg-background/80 hover:bg-muted transition-colors z-10 border"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        <div className="p-6 md:p-8">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-3xl p-0 overflow-hidden">
+        <div className="max-h-[85vh] overflow-y-auto p-6 md:p-8">
           {/* Header Section */}
           <div className="mb-6 pb-6 border-b border-border">
+            <DialogHeader className="mb-4 text-left">
+              <DialogTitle className="text-2xl font-bold text-card-foreground">
+                {mentor.name}
+              </DialogTitle>
+              <DialogDescription className="text-base">
+                {mentor.jobTitle || mentor.role}
+              </DialogDescription>
+            </DialogHeader>
             <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-2xl font-bold text-card-foreground">
-                  {mentor.name}
-                </h2>
-                <p className="text-muted-foreground">{mentor.role}</p>
-              </div>
               <Badge variant="outline" className={cn("shrink-0", getAvailabilityColor(mentor.availability))}>
                 {mentor.availability}
               </Badge>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-3 mb-4">
+            <div className="grid sm:grid-cols-2 gap-3 mb-4 text-sm">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Building2 className="h-4 w-4" />
                 <span>{mentor.organization}</span>
               </div>
-              {mentor.graduationYear > 0 && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <GraduationCap className="h-4 w-4" />
-                  <span>Batch of {mentor.graduationYear}</span>
-                </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{mentor.bio}</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {mentor.interests.map((interest) => (
+                <Badge
+                  key={interest}
+                  variant="secondary"
+                  className="max-w-full whitespace-normal break-words text-xs h-auto py-1 leading-snug"
+                >
+                  {interest}
+                </Badge>
+              ))}
+            </div>
+            {mentor.expectations && (
+              <div className="rounded-xl border bg-muted/40 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                  Mentor Expectations
+                </p>
+                <p className="text-sm text-foreground/90">{mentor.expectations}</p>
+              </div>
+            )}
+            <div className="mt-4 flex flex-wrap gap-4 text-sm">
+              <a href={`mailto:${mentor.email}`} className="inline-flex items-center gap-1.5 text-primary hover:underline">
+                <Mail className="h-4 w-4" />
+                Contact
+              </a>
+              {linkedInUrl && (
+                <a
+                  href={linkedInUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-blue-600 hover:underline"
+                >
+                  <Linkedin className="h-4 w-4" />
+                  LinkedIn
+                </a>
               )}
             </div>
-            <p className="text-sm text-muted-foreground mb-4">{mentor.bio}</p>
           </div>
 
-          {/* Selection Form */}
-          {successMessage ? (
-            <div className="text-center py-8">
-              <div className="bg-green-100 text-green-800 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-card-foreground mb-2">Success!</h3>
-              <p className="text-muted-foreground">{successMessage}</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-card-foreground mb-2">Add to Preferences</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Select a priority rank for this mentor (1st = Highest Priority).
-                  <br className="my-1" />
-                  After saving, this mentor will be added to your selection list in the Dashboard.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="rank">Preference Rank</Label>
-                <Select value={rank} onValueChange={setRank}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Rank" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1st Preference (Highest)</SelectItem>
-                    <SelectItem value="2">2nd Preference</SelectItem>
-                    <SelectItem value="3">3rd Preference</SelectItem>
-                    <SelectItem value="4">4th Preference</SelectItem>
-                    <SelectItem value="5">5th Preference</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {errorMessage && (
-                <div className="p-3 text-sm text-red-500 bg-red-100 rounded">
-                  {errorMessage}
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <h3 className="text-lg font-semibold text-card-foreground mb-2">Preference Selection</h3>
+            <p className="text-sm text-muted-foreground">
+              Review mentor details here, then use the preference panel at the top of the page to search by mentor name and set your preference order.
+            </p>
+            {selectionRank ? (
+              <div className="mt-4 bg-primary/10 border border-primary/20 p-3 rounded-lg flex items-center gap-3">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground font-bold text-sm">
+                  {selectionRank}
+                </span>
+                <div className="text-sm">
+                  <p className="font-medium text-primary">Already in your preference list</p>
+                  <p className="text-muted-foreground text-xs">
+                    {preferencesLocked ? "Preference order is locked" : "Change the order from the top preference panel"}
+                  </p>
                 </div>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Saving..." : "Save Preference"}
-              </Button>
-            </form>
-          )}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

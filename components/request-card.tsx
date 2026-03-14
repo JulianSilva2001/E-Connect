@@ -41,7 +41,6 @@ export function RequestCard({ req }: { req: any }) {
                         </CardTitle>
                         <CardDescription>Batch of {req.menteeBatch}</CardDescription>
                     </div>
-                    <Badge variant="outline">Rank #{req.rank}</Badge>
                 </div>
             </CardHeader>
             <CardContent>

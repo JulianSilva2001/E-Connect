@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MentorBrowser } from "@/components/mentor-browser";
 import { RequestCard } from "@/components/request-card";
 import { AcceptedMenteeCard } from "@/components/accepted-mentee-card";
+import { AcceptedMentorCard } from "@/components/accepted-mentor-card";
 import { FeedbackSection } from "@/components/feedback-section";
-import { getMentors, getMentorRequests, processMentorshipRequest, getAcceptedMentees } from "@/actions/mentorship";
+import { getMentors, getMentorRequests, processMentorshipRequest, getAcceptedMentees, getAcceptedMentors } from "@/actions/mentorship";
 import { hasAcceptedSession, getGeneralFeedbacks, getMentorAboutMenteeFeedbacks, getMenteeAboutMentorFeedbacks, getAcceptedMentorsForMentee, getAcceptedMenteesForMentor } from "@/actions/feedback";
 import { User, MenteeProfile } from "@prisma/client";
 import { Target, BookOpen, Clock, Lightbulb, Briefcase, Users, CheckCircle2, Check, X, MessageSquare } from "lucide-react";
@@ -19,6 +20,9 @@ import { Navigation } from "@/components/navigation";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
 import { isAdminEmail } from "@/lib/admin";
+import { ProfileEditor } from "@/components/profile-editor";
+import { ConfirmMentorPreferencesButton } from "@/components/confirm-mentor-preferences-button";
+import { MentorPreferenceOrderEditor } from "@/components/mentor-preference-order-editor";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -83,6 +87,8 @@ export default async function DashboardPage() {
 
     const mentorRequests = user.role === 'MENTOR' ? await getMentorRequests() : [];
     const myMentees = user.role === 'MENTOR' ? await getAcceptedMentees() : [];
+    const myMentors = user.role === 'MENTEE' ? await getAcceptedMentors() : [];
+    const myMentor = user.role === 'MENTEE' ? myMentors[0] ?? null : null;
 
     // Feedback data — available for both roles
     const [generalFeedbacks, userHasSession] = await Promise.all([
@@ -130,12 +136,20 @@ export default async function DashboardPage() {
                             Program Guide
                         </TabsTrigger>
                         {user.role === 'MENTEE' ? (
-                            <TabsTrigger
-                                value="select-mentors"
-                                className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
-                            >
-                                Select Mentors
-                            </TabsTrigger>
+                            <>
+                                <TabsTrigger
+                                    value="select-mentors"
+                                    className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
+                                >
+                                    Select Mentors
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="my-mentor"
+                                    className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
+                                >
+                                    My Mentor
+                                </TabsTrigger>
+                            </>
                         ) : (
                             <>
                                 <TabsTrigger value="requests" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all">
@@ -163,6 +177,12 @@ export default async function DashboardPage() {
                             <MessageSquare className="w-4 h-4 mr-1.5" />
                             Feedback
                         </TabsTrigger>
+                        <TabsTrigger
+                            value="profile"
+                            className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
+                        >
+                            Profile
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="instructions" className="animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
@@ -174,7 +194,7 @@ export default async function DashboardPage() {
                                         <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
                                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         </div>
-                                        <h2 className="text-2xl font-bold text-gray-900">Welcome back, {user.name.split(' ')[0]}!</h2>
+                                        <h2 className="text-2xl font-bold text-gray-900">Welcome back, {user.name?.split(' ')[0] || 'there'}!</h2>
                                     </div>
                                     <div className="space-y-6">
                                         <p className="text-gray-600 leading-relaxed">
@@ -208,6 +228,11 @@ export default async function DashboardPage() {
                                                 <div className="text-sm font-medium opacity-80 mb-2">Your Selections</div>
                                                 <div className="text-2xl font-bold">
                                                     {user.menteeProfile?.selections?.length || 0} / 5
+                                                </div>
+                                                <div className="text-xs mt-2 text-primary-foreground/80">
+                                                    {(user.menteeProfile as any)?.preferencesSubmitted
+                                                        ? "Preference order confirmed and locked"
+                                                        : "Draft only until you confirm"}
                                                 </div>
                                                 <div className="w-full bg-white/20 h-2 rounded-full mt-3 overflow-hidden">
                                                     <div
@@ -313,15 +338,83 @@ export default async function DashboardPage() {
                     </TabsContent>
 
                     {user.role === 'MENTEE' && (
-                        <TabsContent value="select-mentors" className="mt-6 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
-                            <MentorBrowser
-                                initialMentors={allMentors as any}
-                                selections={user.menteeProfile?.selections?.map(s => ({
-                                    mentorId: s.mentorId,
-                                    rank: s.rank
-                                })) || []}
-                            />
-                        </TabsContent>
+                        <>
+                            <TabsContent value="select-mentors" className="mt-6 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
+                                <div className="bg-white border rounded-2xl shadow-sm p-6 mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                        <h2 className="text-xl font-semibold">Confirm Your Preference Order</h2>
+                                        <p className="text-muted-foreground text-sm mt-1">
+                                            Saving mentors keeps them as a draft. Requests are sent only after you confirm.
+                                        </p>
+                                        <div className="mt-3 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                            Order is locked after confirmation.
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                                        <span className="text-sm text-muted-foreground">
+                                            Selected: {user.menteeProfile?.selections?.length || 0} / 5
+                                        </span>
+                                        <ConfirmMentorPreferencesButton
+                                            selectionCount={user.menteeProfile?.selections?.length || 0}
+                                            alreadySubmitted={(user.menteeProfile as any)?.preferencesSubmitted || false}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="bg-white border rounded-2xl shadow-sm p-6 mb-6">
+                                    <div className="mb-4">
+                                        <h3 className="text-lg font-semibold">Set Preference Order</h3>
+                                        <p className="text-sm text-muted-foreground mt-1">
+                                            Add mentors from the cards below, then set their order here.
+                                        </p>
+                                    </div>
+                                    <MentorPreferenceOrderEditor
+                                        selections={user.menteeProfile?.selections?.map((s) => ({
+                                            mentorId: s.mentorId,
+                                            rank: s.rank,
+                                            mentorName: s.mentor.user.name || "Unknown",
+                                            mentorRole: s.mentor.jobTitle || "Mentor",
+                                        })) || []}
+                                        allMentors={allMentors.map((mentor: any) => ({
+                                            mentorId: mentor.id,
+                                            mentorName: mentor.name || "Unknown",
+                                            mentorRole: mentor.jobTitle || mentor.role || "Mentor",
+                                        }))}
+                                        preferencesLocked={(user.menteeProfile as any)?.preferencesSubmitted || false}
+                                    />
+                                </div>
+                                <MentorBrowser
+                                    initialMentors={allMentors as any}
+                                    selections={user.menteeProfile?.selections?.map(s => ({
+                                        mentorId: s.mentorId,
+                                        rank: s.rank
+                                    })) || []}
+                                    preferencesLocked={(user.menteeProfile as any)?.preferencesSubmitted || false}
+                                />
+                            </TabsContent>
+                            <TabsContent value="my-mentor" className="mt-6">
+                                <div className="mb-6">
+                                    <h2 className="text-xl font-semibold mb-2">My Mentor</h2>
+                                    <p className="text-muted-foreground">
+                                        Your confirmed mentor will appear here once a request is accepted.
+                                    </p>
+                                </div>
+                                {!myMentor ? (
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border min-h-[200px] flex items-center justify-center">
+                                        <div className="text-center">
+                                            <div className="bg-blue-100 text-blue-800 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+                                                <Users className="w-6 h-6" />
+                                            </div>
+                                            <h3 className="text-lg font-medium">No mentor confirmed yet</h3>
+                                            <p className="text-muted-foreground mt-2">Once a mentor accepts your request, they will appear here.</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="max-w-2xl">
+                                        <AcceptedMentorCard mentor={myMentor as any} />
+                                    </div>
+                                )}
+                            </TabsContent>
+                        </>
                     )}
 
                     {user.role === 'MENTOR' && (
@@ -425,6 +518,38 @@ export default async function DashboardPage() {
                             generalFeedbacks={generalFeedbacks as any}
                             targetedFeedbacks={targetedFeedbacks as any}
                             targetOptions={targetOptions as any}
+                        />
+                    </TabsContent>
+                    <TabsContent value="profile" className="mt-6 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
+                        <ProfileEditor
+                            initialValues={user.role === "MENTOR"
+                                ? {
+                                    name: user.name || "",
+                                    role: "MENTOR",
+                                    contactNumber: (user.mentorProfile as any)?.contactNumber || "",
+                                    organization: user.mentorProfile?.organization || "",
+                                    jobTitle: user.mentorProfile?.jobTitle || "",
+                                    graduationYear: user.mentorProfile?.graduationYear || undefined,
+                                    linkedIn: user.mentorProfile?.linkedIn || "",
+                                    expectations: user.mentorProfile?.expectations || "",
+                                    expertise: user.mentorProfile?.expertise?.join(", ") || "",
+                                    preferredMentees: user.mentorProfile?.preferredMentees || 2,
+                                    bio: user.mentorProfile?.bio || "",
+                                }
+                                : {
+                                    name: user.name || "",
+                                    role: "MENTEE",
+                                    contactNumber: (user.menteeProfile as any)?.contactNumber || "",
+                                    batch: user.menteeProfile?.batch || "",
+                                    interests: user.menteeProfile?.interests?.join(", ") || "",
+                                    bio: user.menteeProfile?.bio || "",
+                                    portfolio: user.menteeProfile?.portfolio || "",
+                                    cvLink: user.menteeProfile?.cvLink || "",
+                                    github: user.menteeProfile?.github || "",
+                                    menteeLinkedin: user.menteeProfile?.linkedin || "",
+                                    motivation: user.menteeProfile?.motivation || "",
+                                    goal: user.menteeProfile?.goal || "",
+                                } as any}
                         />
                     </TabsContent>
                 </Tabs>

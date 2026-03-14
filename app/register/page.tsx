@@ -32,11 +32,12 @@ const RegisterSchema = z.object({
     password: z.string().min(6, "Password must be at least 6 characters"),
     name: z.string().min(1, "Name is required"),
     role: z.enum(['MENTOR', 'MENTEE']),
+    contactNumber: z.string().min(7, "Contact number is required").max(20, "Contact number is too long"),
 
     // Mentor Fields
     organization: z.string().optional(),
     jobTitle: z.string().optional(),
-    graduationYear: z.string().optional(), // Input as string, coerced in backend
+    graduationYear: z.coerce.number().optional(),
     linkedIn: z.string().optional(),
     expectations: z.string().optional(),
     expertise: z.string().optional(),
@@ -79,9 +80,10 @@ export default function RegisterPage() {
             password: '',
             name: '',
             role: 'MENTEE',
+            contactNumber: '',
             organization: '',
             jobTitle: '',
-            graduationYear: '',
+            graduationYear: undefined,
             linkedIn: '',
             expectations: '',
             expertise: '',
@@ -174,6 +176,22 @@ export default function RegisterPage() {
                             />
                             <FormField
                                 control={form.control}
+                                name="contactNumber"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Contact Number</FormLabel>
+                                        <FormControl>
+                                            <Input disabled={isPending} placeholder="+94 77 123 4567" {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
                                 name="role"
                                 render={({ field }) => (
                                     <FormItem>
@@ -235,7 +253,12 @@ export default function RegisterPage() {
                                                 <FormItem>
                                                     <FormLabel>Graduation Year (Batch)</FormLabel>
                                                     <FormControl>
-                                                        <Input type="number" placeholder="2015" {...field} />
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="2015"
+                                                            value={field.value ?? ''}
+                                                            onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                                                        />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>

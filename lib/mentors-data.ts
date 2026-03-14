@@ -12,6 +12,7 @@ export interface Mentor {
   email: string
   linkedIn?: string
   jobTitle?: string
+  expectations?: string
   availableSlots?: number
   capacity?: number
 }
