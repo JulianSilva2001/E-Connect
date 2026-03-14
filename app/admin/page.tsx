@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { AdminDeleteUserButton } from "@/components/admin-delete-user-button";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -200,6 +201,7 @@ export default async function AdminPage() {
                       <th className="py-3 pr-4 font-semibold">Organization</th>
                       <th className="py-3 pr-4 font-semibold">Job Title</th>
                       <th className="py-3 pr-4 font-semibold">Preferred Mentees</th>
+                      <th className="py-3 pr-4 font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -210,6 +212,12 @@ export default async function AdminPage() {
                         <td className="py-3 pr-4">{mentor.organization || "-"}</td>
                         <td className="py-3 pr-4">{mentor.jobTitle || "-"}</td>
                         <td className="py-3 pr-4">{mentor.preferredMentees}</td>
+                        <td className="py-3 pr-4">
+                          <AdminDeleteUserButton
+                            userId={mentor.user.id}
+                            label={mentor.user.name || mentor.user.email}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -235,6 +243,7 @@ export default async function AdminPage() {
                       <th className="py-3 pr-4 font-semibold">Email</th>
                       <th className="py-3 pr-4 font-semibold">Batch</th>
                       <th className="py-3 pr-4 font-semibold">Interests</th>
+                      <th className="py-3 pr-4 font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -244,6 +253,12 @@ export default async function AdminPage() {
                         <td className="py-3 pr-4 text-muted-foreground">{mentee.user.email}</td>
                         <td className="py-3 pr-4">{mentee.batch || "-"}</td>
                         <td className="py-3 pr-4">{mentee.interests.length ? mentee.interests.join(", ") : "-"}</td>
+                        <td className="py-3 pr-4">
+                          <AdminDeleteUserButton
+                            userId={mentee.user.id}
+                            label={mentee.user.name || mentee.user.email}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

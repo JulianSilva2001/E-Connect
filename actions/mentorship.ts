@@ -4,8 +4,63 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
+import { sendMentorRequestNotification } from '@/lib/notifications';
 
 import { SelectionStatus } from '@prisma/client';
+
+async function notifyMentorForActionableSelection(selectionId: string, reason: "rank_1" | "promoted_after_rejection") {
+    const selection = await db.selection.findUnique({
+        where: { id: selectionId },
+        include: {
+            mentor: {
+                include: {
+                    user: true
+                }
+            },
+            mentee: {
+                include: {
+                    user: true
+                }
+            }
+        }
+    });
+
+    if (!selection?.mentor?.user?.email || !selection?.mentee?.user?.name) {
+        return;
+    }
+
+    try {
+        await sendMentorRequestNotification({
+            mentorEmail: selection.mentor.user.email,
+            mentorName: selection.mentor.user.name || "Mentor",
+            menteeName: selection.mentee.user.name || "A mentee",
+            reason,
+        });
+    } catch (error) {
+        console.error("Failed to send mentor notification:", error);
+    }
+}
+
+async function findNextActionableSelectionId(menteeId: string) {
+    const selections = await db.selection.findMany({
+        where: { menteeId },
+        orderBy: { rank: 'asc' }
+    });
+
+    for (const selection of selections) {
+        if (selection.status !== 'PENDING') {
+            continue;
+        }
+
+        const higherRankedSelections = selections.filter(s => s.rank < selection.rank);
+        const isActionable = higherRankedSelections.every(s => s.status === 'REJECTED');
+        if (isActionable) {
+            return selection.id;
+        }
+    }
+
+    return null;
+}
 
 export async function selectMentor(mentorId: string, rank: number) {
     const session = await auth();
@@ -20,6 +75,10 @@ export async function selectMentor(mentorId: string, rank: number) {
 
     if (!user || user.role !== 'MENTEE' || !user.menteeProfile) {
         return { error: "You must be a registered Mentee to select mentors." };
+    }
+
+    if ((user.menteeProfile as any).preferencesSubmitted) {
+        return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
     }
 
     const menteeId = user.menteeProfile.id;
@@ -59,11 +118,238 @@ export async function selectMentor(mentorId: string, rank: number) {
         }
 
         revalidatePath('/dashboard');
-        return { success: "Preference saved!" };
+        return { success: "Preference saved as draft. Confirm your order to send requests." };
 
     } catch (error) {
         console.error("Failed to select mentor:", error);
         return { error: "Failed to save preference." };
+    }
+}
+
+export async function addMentorToPreferences(mentorId: string) {
+    const session = await auth();
+    if (!session?.user?.email) {
+        return { error: "Not authenticated" };
+    }
+
+    const user = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: {
+            menteeProfile: {
+                include: {
+                    selections: {
+                        orderBy: { rank: "asc" }
+                    }
+                }
+            }
+        },
+    });
+
+    if (!user || user.role !== "MENTEE" || !user.menteeProfile) {
+        return { error: "You must be a registered Mentee to select mentors." };
+    }
+
+    if ((user.menteeProfile as any).preferencesSubmitted) {
+        return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
+    }
+
+    const existingSelection = user.menteeProfile.selections.find((selection) => selection.mentorId === mentorId);
+    if (existingSelection) {
+        return { success: "Mentor already added to your preference list." };
+    }
+
+    if (user.menteeProfile.selections.length >= 5) {
+        return { error: "You can only keep up to 5 mentors in your preference list." };
+    }
+
+    const nextRank = [1, 2, 3, 4, 5].find(
+        (candidateRank) => !user.menteeProfile?.selections.some((selection) => selection.rank === candidateRank)
+    );
+
+    if (!nextRank) {
+        return { error: "No preference slot is available." };
+    }
+
+    try {
+        await db.selection.create({
+            data: {
+                menteeId: user.menteeProfile.id,
+                mentorId,
+                rank: nextRank,
+                status: SelectionStatus.PENDING,
+            }
+        });
+
+        revalidatePath('/dashboard');
+        return { success: "Mentor added to your preference list." };
+    } catch (error) {
+        console.error("Failed to add mentor preference:", error);
+        return { error: "Failed to add mentor preference." };
+    }
+}
+
+export async function updateMentorPreferenceRank(mentorId: string, newRank: number) {
+    const session = await auth();
+    if (!session?.user?.email) {
+        return { error: "Not authenticated" };
+    }
+
+    const user = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: {
+            menteeProfile: {
+                include: {
+                    selections: true
+                }
+            }
+        },
+    });
+
+    if (!user || user.role !== "MENTEE" || !user.menteeProfile) {
+        return { error: "You must be a registered Mentee to update mentor preferences." };
+    }
+
+    if ((user.menteeProfile as any).preferencesSubmitted) {
+        return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
+    }
+
+    if (newRank < 1 || newRank > 5) {
+        return { error: "Rank must be between 1 and 5." };
+    }
+
+    const currentSelection = user.menteeProfile.selections.find((selection) => selection.mentorId === mentorId);
+    if (!currentSelection) {
+        return { error: "Preference not found." };
+    }
+
+    if (currentSelection.rank === newRank) {
+        return { success: "Preference order updated." };
+    }
+
+    const conflictingSelection = user.menteeProfile.selections.find((selection) => selection.rank === newRank);
+
+    try {
+        await db.$transaction(async (tx) => {
+            if (conflictingSelection) {
+                await tx.selection.update({
+                    where: { id: conflictingSelection.id },
+                    data: { rank: 99 }
+                });
+            }
+
+            await tx.selection.update({
+                where: { id: currentSelection.id },
+                data: { rank: newRank, status: SelectionStatus.PENDING }
+            });
+
+            if (conflictingSelection) {
+                await tx.selection.update({
+                    where: { id: conflictingSelection.id },
+                    data: { rank: currentSelection.rank, status: SelectionStatus.PENDING }
+                });
+            }
+        });
+
+        revalidatePath('/dashboard');
+        return { success: "Preference order updated." };
+    } catch (error) {
+        console.error("Failed to update mentor preference rank:", error);
+        return { error: "Failed to update mentor preference order." };
+    }
+}
+
+export async function removeMentorPreference(mentorId: string) {
+    const session = await auth();
+    if (!session?.user?.email) {
+        return { error: "Not authenticated" };
+    }
+
+    const user = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: {
+            menteeProfile: true
+        },
+    });
+
+    if (!user || user.role !== "MENTEE" || !user.menteeProfile) {
+        return { error: "You must be a registered Mentee to update mentor preferences." };
+    }
+
+    if ((user.menteeProfile as any).preferencesSubmitted) {
+        return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
+    }
+
+    try {
+        await db.selection.deleteMany({
+            where: {
+                menteeId: user.menteeProfile.id,
+                mentorId,
+            }
+        });
+
+        revalidatePath('/dashboard');
+        return { success: "Mentor removed from your preference list." };
+    } catch (error) {
+        console.error("Failed to remove mentor preference:", error);
+        return { error: "Failed to remove mentor preference." };
+    }
+}
+
+export async function confirmMentorPreferences() {
+    const session = await auth();
+    if (!session?.user?.email) {
+        return { error: "Not authenticated" };
+    }
+
+    const user = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: {
+            menteeProfile: {
+                include: {
+                    selections: {
+                        orderBy: { rank: "asc" }
+                    }
+                }
+            }
+        },
+    });
+
+    if (!user || user.role !== "MENTEE" || !user.menteeProfile) {
+        return { error: "You must be a registered Mentee to confirm preferences." };
+    }
+
+    if (user.menteeProfile.selections.length < 1) {
+        return { error: "Please select at least one mentor before confirming your preference order." };
+    }
+
+    if ((user.menteeProfile as any).preferencesSubmitted) {
+        return { error: "Your mentor preference order has already been confirmed." };
+    }
+
+    try {
+        await db.menteeProfile.update({
+            where: { id: user.menteeProfile.id },
+            data: { preferencesSubmitted: true } as any
+        });
+
+        const actionableSelectionId = await findNextActionableSelectionId(user.menteeProfile.id);
+        if (actionableSelectionId) {
+            await notifyMentorForActionableSelection(actionableSelectionId, "rank_1");
+        }
+
+        revalidatePath('/dashboard');
+        return { success: "Preferences confirmed. Requests were sent to the current actionable mentor." };
+    } catch (error) {
+        console.error("Failed to confirm mentor preferences:", error);
+        if (error instanceof Error) {
+            if (error.message.includes("preferencesSubmitted") || error.message.includes("Unknown argument")) {
+                return { error: "Failed to confirm mentor preferences. The database schema is not updated yet. Run `npx prisma db push` and `npx prisma generate`, then restart the dev server." };
+            }
+
+            return { error: `Failed to confirm mentor preferences. ${error.message}` };
+        }
+
+        return { error: "Failed to confirm mentor preferences." };
     }
 }
 
@@ -91,11 +377,15 @@ export async function getMentors() {
             id: profile?.id,
             userId: m.id,
             name: m.name,
-            role: "Mentor",
+            role: profile?.jobTitle || "Mentor",
             organization: profile?.organization || "ENTC",
+            graduationYear: profile?.graduationYear || 0,
             jobTitle: profile?.jobTitle || "",
             interests: profile?.expertise || [],
             bio: profile?.bio || "",
+            email: m.email,
+            linkedIn: profile?.linkedIn || undefined,
+            expectations: profile?.expectations || undefined,
             // Availability logic:
             // If capacity is 0 (unlimited? or none?), allow. Assuming 0 means none or not set? 
             // If capacity > 0 and slots == 0 -> Full.
@@ -139,6 +429,9 @@ export async function getMentorRequests() {
 
     // Filter selections: A request is valid ONLY IF all higher-ranked selections (rank < current) are REJECTED.
     const validRequests = pendingSelections.filter(selection => {
+        if (!(selection.mentee as any).preferencesSubmitted) {
+            return false;
+        }
         const higherRankedSelections = selection.mentee.selections.filter(s => s.rank < selection.rank);
         // All higher ranked must be rejected
         return higherRankedSelections.every(s => s.status === 'REJECTED');
@@ -222,6 +515,11 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
                 where: { id: selectionId },
                 data: { status: 'REJECTED' }
             });
+
+            const nextActionableSelectionId = await findNextActionableSelectionId(selection.menteeId);
+            if (nextActionableSelectionId) {
+                await notifyMentorForActionableSelection(nextActionableSelectionId, "promoted_after_rejection");
+            }
         }
 
         revalidatePath('/dashboard');
@@ -271,5 +569,43 @@ export async function getAcceptedMentees() {
         cvLink: s.mentee.cvLink,
         github: s.mentee.github,
         linkedin: s.mentee.linkedin,
+    }));
+}
+
+export async function getAcceptedMentors() {
+    const session = await auth();
+    if (!session?.user?.email) return [];
+
+    const user = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: { menteeProfile: true }
+    });
+
+    if (!user || user.role !== 'MENTEE' || !user.menteeProfile) return [];
+
+    const acceptedSelections = await db.selection.findMany({
+        where: {
+            menteeId: user.menteeProfile.id,
+            status: 'ACCEPTED'
+        },
+        include: {
+            mentor: {
+                include: {
+                    user: true
+                }
+            }
+        }
+    });
+
+    return acceptedSelections.map(s => ({
+        id: s.mentor.id,
+        name: s.mentor.user.name,
+        email: s.mentor.user.email,
+        organization: s.mentor.organization,
+        jobTitle: s.mentor.jobTitle,
+        interests: s.mentor.expertise,
+        bio: s.mentor.bio,
+        linkedin: s.mentor.linkedIn,
+        expectations: s.mentor.expectations,
     }));
 }
