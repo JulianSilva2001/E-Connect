@@ -78,30 +78,16 @@ export function Navigation({ variant = "home", user }: NavigationProps) {
           <div className="flex items-center justify-between h-14">
             {/* Logos */}
             <Link
-              href={user ? "/dashboard" : "/"}
-              className="flex items-center gap-2 group animate-in fade-in-0 slide-in-from-top-2 duration-700"
+              href="/"
+              className="flex items-center gap-3 group animate-in fade-in-0 slide-in-from-top-2 duration-700"
             >
-              {/* ENTC Logo */}
-              <div className="bg-white/95 rounded-lg p-1.5 hover:scale-105 transition-transform flex items-center justify-center h-10 w-10 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-700 delay-100">
+              <div className="bg-white/95 rounded-xl px-2 py-1.5 hover:scale-105 transition-transform flex items-center justify-center h-12 w-[148px] overflow-hidden animate-in fade-in-0 zoom-in-95 duration-700 delay-100 shadow-sm">
                 <Image
-                  src="/ENTC_logo_blue.png"
-                  alt="ENTC Logo"
-                  width={40}
-                  height={40}
+                  src="/E-Connect-logo.svg"
+                  alt="E-Connect Logo"
+                  width={132}
+                  height={36}
                   className="object-contain"
-                />
-              </div>
-
-              {/* Divider */}
-              <div className="h-8 w-[1px] bg-white/30 hidden sm:block" />
-
-              {/* E-Club Logo */}
-              <div className="relative h-10 w-12 hover:scale-105 transition-transform hidden sm:block animate-in fade-in-0 slide-in-from-left-2 duration-700 delay-200">
-                <Image
-                  src="/E club white.png"
-                  alt="E-Club Logo"
-                  fill
-                  className="object-contain object-left"
                 />
               </div>
 
