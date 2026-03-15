@@ -89,6 +89,13 @@ export default async function DashboardPage() {
     const myMentees = user.role === 'MENTOR' ? await getAcceptedMentees() : [];
     const myMentors = user.role === 'MENTEE' ? await getAcceptedMentors() : [];
     const myMentor = user.role === 'MENTEE' ? myMentors[0] ?? null : null;
+    const allMentorSelectionsRejected = user.role === "MENTEE"
+        ? (user.menteeProfile?.selections?.length || 0) > 0 &&
+        user.menteeProfile!.selections.every((selection) => selection.status === "REJECTED")
+        : false;
+    const preferencesLocked = user.role === "MENTEE"
+        ? Boolean((user.menteeProfile as any)?.preferencesSubmitted) && !allMentorSelectionsRejected
+        : false;
 
     // Feedback data — available for both roles
     const [generalFeedbacks, userHasSession] = await Promise.all([
@@ -230,7 +237,9 @@ export default async function DashboardPage() {
                                                     {user.menteeProfile?.selections?.length || 0} / 5
                                                 </div>
                                                 <div className="text-xs mt-2 text-primary-foreground/80">
-                                                    {(user.menteeProfile as any)?.preferencesSubmitted
+                                                    {allMentorSelectionsRejected
+                                                        ? "All previous requests were rejected. Build a new list to apply again."
+                                                        : (user.menteeProfile as any)?.preferencesSubmitted
                                                         ? "Preference order confirmed and locked"
                                                         : "Draft only until you confirm"}
                                                 </div>
@@ -347,7 +356,9 @@ export default async function DashboardPage() {
                                             Saving mentors keeps them as a draft. Requests are sent only after you confirm.
                                         </p>
                                         <div className="mt-3 inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                                            Order is locked after confirmation.
+                                            {allMentorSelectionsRejected
+                                                ? "All previous requests were rejected. Update the list and confirm again."
+                                                : "Order is locked after confirmation."}
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-start gap-2 sm:items-end">
@@ -364,7 +375,9 @@ export default async function DashboardPage() {
                                     <div className="mb-4">
                                         <h3 className="text-lg font-semibold">Set Preference Order</h3>
                                         <p className="text-sm text-muted-foreground mt-1">
-                                            Add mentors from the cards below, then set their order here.
+                                            {allMentorSelectionsRejected
+                                                ? "Your last round ended in rejections. Remove or replace mentors here, then confirm a new order."
+                                                : "Add mentors from the cards below, then set their order here."}
                                         </p>
                                     </div>
                                     <MentorPreferenceOrderEditor
@@ -379,7 +392,7 @@ export default async function DashboardPage() {
                                             mentorName: mentor.name || "Unknown",
                                             mentorRole: mentor.jobTitle || mentor.role || "Mentor",
                                         }))}
-                                        preferencesLocked={(user.menteeProfile as any)?.preferencesSubmitted || false}
+                                        preferencesLocked={preferencesLocked}
                                     />
                                 </div>
                                 <MentorBrowser
@@ -388,7 +401,7 @@ export default async function DashboardPage() {
                                         mentorId: s.mentorId,
                                         rank: s.rank
                                     })) || []}
-                                    preferencesLocked={(user.menteeProfile as any)?.preferencesSubmitted || false}
+                                    preferencesLocked={preferencesLocked}
                                 />
                             </TabsContent>
                             <TabsContent value="my-mentor" className="mt-6">

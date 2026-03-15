@@ -8,6 +8,23 @@ import { sendMentorRequestNotification } from '@/lib/notifications';
 
 import { SelectionStatus } from '@prisma/client';
 
+function hasAllSelectionsRejected(
+    selections: Array<{ status: SelectionStatus | string }>
+) {
+    return selections.length > 0 && selections.every((selection) => selection.status === SelectionStatus.REJECTED);
+}
+
+function isPreferenceOrderLocked(profile: {
+    preferencesSubmitted?: boolean | null;
+    selections?: Array<{ status: SelectionStatus | string }>;
+}) {
+    if (!profile?.preferencesSubmitted) {
+        return false;
+    }
+
+    return !hasAllSelectionsRejected(profile.selections || []);
+}
+
 async function notifyMentorForActionableSelection(selectionId: string, reason: "rank_1" | "promoted_after_rejection") {
     const selection = await db.selection.findUnique({
         where: { id: selectionId },
@@ -70,14 +87,20 @@ export async function selectMentor(mentorId: string, rank: number) {
 
     const user = await db.user.findUnique({
         where: { email: session.user.email },
-        include: { menteeProfile: true },
+        include: {
+            menteeProfile: {
+                include: {
+                    selections: true
+                }
+            }
+        },
     });
 
     if (!user || user.role !== 'MENTEE' || !user.menteeProfile) {
         return { error: "You must be a registered Mentee to select mentors." };
     }
 
-    if ((user.menteeProfile as any).preferencesSubmitted) {
+    if (isPreferenceOrderLocked(user.menteeProfile as any)) {
         return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
     }
 
@@ -88,6 +111,13 @@ export async function selectMentor(mentorId: string, rank: number) {
     }
 
     try {
+        if ((user.menteeProfile as any).preferencesSubmitted) {
+            await db.menteeProfile.update({
+                where: { id: menteeId },
+                data: { preferencesSubmitted: false } as any
+            });
+        }
+
         const existingSelection = await db.selection.findFirst({
             where: { menteeId, mentorId }
         });
@@ -149,7 +179,7 @@ export async function addMentorToPreferences(mentorId: string) {
         return { error: "You must be a registered Mentee to select mentors." };
     }
 
-    if ((user.menteeProfile as any).preferencesSubmitted) {
+    if (isPreferenceOrderLocked(user.menteeProfile as any)) {
         return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
     }
 
@@ -171,13 +201,22 @@ export async function addMentorToPreferences(mentorId: string) {
     }
 
     try {
-        await db.selection.create({
-            data: {
-                menteeId: user.menteeProfile.id,
-                mentorId,
-                rank: nextRank,
-                status: SelectionStatus.PENDING,
+        await db.$transaction(async (tx) => {
+            if ((user.menteeProfile as any).preferencesSubmitted) {
+                await tx.menteeProfile.update({
+                    where: { id: user.menteeProfile!.id },
+                    data: { preferencesSubmitted: false } as any
+                });
             }
+
+            await tx.selection.create({
+                data: {
+                    menteeId: user.menteeProfile!.id,
+                    mentorId,
+                    rank: nextRank,
+                    status: SelectionStatus.PENDING,
+                }
+            });
         });
 
         revalidatePath('/dashboard');
@@ -209,7 +248,7 @@ export async function updateMentorPreferenceRank(mentorId: string, newRank: numb
         return { error: "You must be a registered Mentee to update mentor preferences." };
     }
 
-    if ((user.menteeProfile as any).preferencesSubmitted) {
+    if (isPreferenceOrderLocked(user.menteeProfile as any)) {
         return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
     }
 
@@ -230,6 +269,13 @@ export async function updateMentorPreferenceRank(mentorId: string, newRank: numb
 
     try {
         await db.$transaction(async (tx) => {
+            if ((user.menteeProfile as any).preferencesSubmitted) {
+                await tx.menteeProfile.update({
+                    where: { id: user.menteeProfile!.id },
+                    data: { preferencesSubmitted: false } as any
+                });
+            }
+
             if (conflictingSelection) {
                 await tx.selection.update({
                     where: { id: conflictingSelection.id },
@@ -275,16 +321,32 @@ export async function removeMentorPreference(mentorId: string) {
         return { error: "You must be a registered Mentee to update mentor preferences." };
     }
 
-    if ((user.menteeProfile as any).preferencesSubmitted) {
+    const menteeProfileWithSelections = {
+        ...user.menteeProfile,
+        selections: await db.selection.findMany({
+            where: { menteeId: user.menteeProfile.id }
+        })
+    };
+
+    if (isPreferenceOrderLocked(menteeProfileWithSelections as any)) {
         return { error: "Your mentor preference order has already been confirmed and can no longer be changed." };
     }
 
     try {
-        await db.selection.deleteMany({
-            where: {
-                menteeId: user.menteeProfile.id,
-                mentorId,
+        await db.$transaction(async (tx) => {
+            if ((user.menteeProfile as any).preferencesSubmitted) {
+                await tx.menteeProfile.update({
+                    where: { id: user.menteeProfile!.id },
+                    data: { preferencesSubmitted: false } as any
+                });
             }
+
+            await tx.selection.deleteMany({
+                where: {
+                    menteeId: user.menteeProfile!.id,
+                    mentorId,
+                }
+            });
         });
 
         revalidatePath('/dashboard');
@@ -320,6 +382,10 @@ export async function confirmMentorPreferences() {
 
     if (user.menteeProfile.selections.length < 1) {
         return { error: "Please select at least one mentor before confirming your preference order." };
+    }
+
+    if (hasAllSelectionsRejected(user.menteeProfile.selections)) {
+        return { error: "Your current list only contains rejected mentors. Add or update at least one mentor before confirming again." };
     }
 
     if ((user.menteeProfile as any).preferencesSubmitted) {
