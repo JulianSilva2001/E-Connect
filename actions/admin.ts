@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { isAdminEmail } from '@/lib/admin';
 import { revalidatePath } from 'next/cache';
+import { normalizeBatchList } from '@/lib/registration-batches';
 
 export async function deleteUserAccount(userId: string) {
     const session = await auth();
@@ -70,5 +71,37 @@ export async function deleteUserAccount(userId: string) {
     } catch (error) {
         console.error('Failed to delete account:', error);
         return { error: 'Failed to delete account.' };
+    }
+}
+
+export async function updateRegistrationBatches(rawBatches: string) {
+    const session = await auth();
+
+    if (!session?.user?.email || !isAdminEmail(session.user.email)) {
+        return { error: 'Unauthorized' };
+    }
+
+    const allowedMenteeBatches = normalizeBatchList(rawBatches.split(','));
+
+    if (allowedMenteeBatches.length === 0) {
+        return { error: 'Add at least one batch.' };
+    }
+
+    try {
+        await db.registrationSettings.upsert({
+            where: { singletonKey: 'registration' },
+            update: { allowedMenteeBatches },
+            create: {
+                singletonKey: 'registration',
+                allowedMenteeBatches,
+            },
+        });
+
+        revalidatePath('/admin');
+        revalidatePath('/register');
+        return { success: 'Registration batches updated.' };
+    } catch (error) {
+        console.error('Failed to update registration batches:', error);
+        return { error: 'Failed to update registration batches.' };
     }
 }

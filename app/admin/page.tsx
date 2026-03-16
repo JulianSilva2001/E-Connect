@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { AdminDeleteUserButton } from "@/components/admin-delete-user-button";
+import { AdminRegistrationBatchesForm } from "@/components/admin-registration-batches-form";
+import { getAllowedMenteeBatches } from "@/lib/registration-batches";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -30,6 +32,7 @@ export default async function AdminPage() {
     allocations,
     mentors,
     mentees,
+    allowedMenteeBatches,
   ] = await Promise.all([
     db.mentorProfile.count(),
     db.menteeProfile.count(),
@@ -86,6 +89,7 @@ export default async function AdminPage() {
         },
       },
     }),
+    getAllowedMenteeBatches(),
   ]);
 
   const mentorAllocationGroups = Array.from(
@@ -143,6 +147,15 @@ export default async function AdminPage() {
           <StatCard title="Pending" value={pendingCount} />
           <StatCard title="Rejected" value={rejectedCount} />
         </div>
+
+        <Card className="border shadow-sm mb-8">
+          <CardHeader>
+            <CardTitle>Registration Batches</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AdminRegistrationBatchesForm initialValue={allowedMenteeBatches.join(", ")} />
+          </CardContent>
+        </Card>
 
         <Card className="border shadow-sm mb-8">
           <CardHeader>
