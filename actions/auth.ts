@@ -9,6 +9,7 @@ import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
+import { getAllowedMenteeBatches } from '@/lib/registration-batches';
 
 const RegisterSchema = z.object({
     email: z.string().email(),
@@ -57,6 +58,13 @@ export const register = async (values: z.infer<typeof RegisterSchema>) => {
 
     if (existingUser) {
         return { error: 'Email already in use!' };
+    }
+
+    if (role === 'MENTEE') {
+        const allowedMenteeBatches = await getAllowedMenteeBatches();
+        if (!batch || !allowedMenteeBatches.includes(batch)) {
+            return { error: 'Please select a valid batch from the registration dropdown.' };
+        }
     }
 
     const hashedPassword = await saltAndHashPassword(password);

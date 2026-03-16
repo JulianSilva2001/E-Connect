@@ -63,6 +63,13 @@ model MenteeProfile {
   selections      Selection[] // Selections made by this mentee
 }
 
+model RegistrationSettings {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  singletonKey        String   @unique @default("registration")
+  allowedMenteeBatches String[]
+  updatedAt           DateTime @updatedAt
+}
+
 enum SelectionStatus {
   PENDING
   ACCEPTED
