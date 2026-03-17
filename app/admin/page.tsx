@@ -11,6 +11,12 @@ import { AdminDeleteUserButton } from "@/components/admin-delete-user-button";
 import { AdminRegistrationBatchesForm } from "@/components/admin-registration-batches-form";
 import { getAllowedMenteeBatches } from "@/lib/registration-batches";
 
+const allocationDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Colombo",
+});
+
 export default async function AdminPage() {
   const session = await auth();
 
@@ -316,7 +322,7 @@ export default async function AdminPage() {
                           <StatusBadge status={item.status} />
                         </td>
                         <td className="py-3 pr-4 text-muted-foreground">
-                          {new Date(item.createdAt).toLocaleString()}
+                          {allocationDateFormatter.format(new Date(item.createdAt))}
                         </td>
                       </tr>
                     ))}

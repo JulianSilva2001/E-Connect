@@ -10,6 +10,7 @@ import { AuthError } from 'next-auth';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getAllowedMenteeBatches } from '@/lib/registration-batches';
+import { getMenteeWordCountMessage, hasMinimumMenteeWordCount } from '@/lib/mentee-text-validation';
 
 const RegisterSchema = z.object({
     email: z.string().email(),
@@ -34,6 +35,30 @@ const RegisterSchema = z.object({
     menteeLinkedin: z.string().optional(), // Distinct from mentor's linkedIn to avoid confusion/types issues if possible, or just share
     motivation: z.string().optional(),
     goal: z.string().optional(),
+}).superRefine((data, ctx) => {
+    if (data.role === 'MENTOR') {
+        if (!data.organization) ctx.addIssue({ code: 'custom', message: 'Organization is required', path: ['organization'] });
+        if (!data.jobTitle) ctx.addIssue({ code: 'custom', message: 'Job title is required', path: ['jobTitle'] });
+        if (!data.linkedIn) ctx.addIssue({ code: 'custom', message: 'LinkedIn is required', path: ['linkedIn'] });
+        if (!data.expertise) ctx.addIssue({ code: 'custom', message: 'Expertise is required', path: ['expertise'] });
+    }
+
+    if (data.role === 'MENTEE') {
+        if (!data.batch) ctx.addIssue({ code: 'custom', message: 'Batch is required', path: ['batch'] });
+        if (!data.bio) ctx.addIssue({ code: 'custom', message: 'About yourself is required', path: ['bio'] });
+        if (!data.motivation) ctx.addIssue({ code: 'custom', message: 'Motivation is required', path: ['motivation'] });
+        if (!data.goal) ctx.addIssue({ code: 'custom', message: 'Goal is required', path: ['goal'] });
+
+        if (data.bio && !hasMinimumMenteeWordCount(data.bio)) {
+            ctx.addIssue({ code: 'custom', message: getMenteeWordCountMessage('About yourself'), path: ['bio'] });
+        }
+        if (data.motivation && !hasMinimumMenteeWordCount(data.motivation)) {
+            ctx.addIssue({ code: 'custom', message: getMenteeWordCountMessage('Why do you need a mentor?'), path: ['motivation'] });
+        }
+        if (data.goal && !hasMinimumMenteeWordCount(data.goal)) {
+            ctx.addIssue({ code: 'custom', message: getMenteeWordCountMessage('What is your goal?'), path: ['goal'] });
+        }
+    }
 });
 
 export const register = async (values: z.infer<typeof RegisterSchema>) => {
@@ -160,8 +185,19 @@ const UpdateProfileSchema = z.object({
     }
     if (data.role === 'MENTEE') {
         if (!data.batch) ctx.addIssue({ code: 'custom', message: 'Batch is required', path: ['batch'] });
+        if (!data.bio) ctx.addIssue({ code: 'custom', message: 'About yourself is required', path: ['bio'] });
         if (!data.motivation) ctx.addIssue({ code: 'custom', message: 'Motivation is required', path: ['motivation'] });
         if (!data.goal) ctx.addIssue({ code: 'custom', message: 'Goal is required', path: ['goal'] });
+
+        if (data.bio && !hasMinimumMenteeWordCount(data.bio)) {
+            ctx.addIssue({ code: 'custom', message: getMenteeWordCountMessage('About yourself'), path: ['bio'] });
+        }
+        if (data.motivation && !hasMinimumMenteeWordCount(data.motivation)) {
+            ctx.addIssue({ code: 'custom', message: getMenteeWordCountMessage('Why do you need a mentor?'), path: ['motivation'] });
+        }
+        if (data.goal && !hasMinimumMenteeWordCount(data.goal)) {
+            ctx.addIssue({ code: 'custom', message: getMenteeWordCountMessage('What is your goal?'), path: ['goal'] });
+        }
     }
 });
 
