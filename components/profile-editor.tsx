@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { updateProfile } from "@/actions/auth";
+import { getMenteeWordCountMessage, hasMinimumMenteeWordCount } from "@/lib/mentee-text-validation";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -39,8 +40,19 @@ const ProfileSchema = z.object({
     }
     if (data.role === "MENTEE") {
         if (!data.batch) ctx.addIssue({ code: "custom", path: ["batch"], message: "Batch is required" });
+        if (!data.bio) ctx.addIssue({ code: "custom", path: ["bio"], message: "About yourself is required" });
         if (!data.motivation) ctx.addIssue({ code: "custom", path: ["motivation"], message: "Motivation is required" });
         if (!data.goal) ctx.addIssue({ code: "custom", path: ["goal"], message: "Goal is required" });
+
+        if (data.bio && !hasMinimumMenteeWordCount(data.bio)) {
+            ctx.addIssue({ code: "custom", path: ["bio"], message: getMenteeWordCountMessage("About yourself") });
+        }
+        if (data.motivation && !hasMinimumMenteeWordCount(data.motivation)) {
+            ctx.addIssue({ code: "custom", path: ["motivation"], message: getMenteeWordCountMessage("Why do you need a mentor?") });
+        }
+        if (data.goal && !hasMinimumMenteeWordCount(data.goal)) {
+            ctx.addIssue({ code: "custom", path: ["goal"], message: getMenteeWordCountMessage("What is your goal?") });
+        }
     }
 });
 

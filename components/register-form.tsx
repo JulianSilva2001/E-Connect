@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import { register } from "@/actions/auth";
+import { getMenteeWordCountMessage, hasMinimumMenteeWordCount } from "@/lib/mentee-text-validation";
 import { Button } from "@/components/ui/button";
 import {
     Form,
@@ -47,19 +48,30 @@ const RegisterSchema = z.object({
     menteeLinkedin: z.string().optional(),
     motivation: z.string().optional(),
     goal: z.string().optional(),
-}).refine((data) => {
+}).superRefine((data, ctx) => {
     if (data.role === "MENTOR") {
-        return !!data.organization && !!data.jobTitle && !!data.linkedIn && !!data.expertise;
+        if (!data.organization) ctx.addIssue({ code: "custom", path: ["organization"], message: "Organization is required" });
+        if (!data.jobTitle) ctx.addIssue({ code: "custom", path: ["jobTitle"], message: "Job title is required" });
+        if (!data.linkedIn) ctx.addIssue({ code: "custom", path: ["linkedIn"], message: "LinkedIn is required" });
+        if (!data.expertise) ctx.addIssue({ code: "custom", path: ["expertise"], message: "Expertise is required" });
     }
 
     if (data.role === "MENTEE") {
-        return !!data.batch && !!data.motivation && !!data.goal;
-    }
+        if (!data.batch) ctx.addIssue({ code: "custom", path: ["batch"], message: "Batch is required" });
+        if (!data.bio) ctx.addIssue({ code: "custom", path: ["bio"], message: "About yourself is required" });
+        if (!data.motivation) ctx.addIssue({ code: "custom", path: ["motivation"], message: "Motivation is required" });
+        if (!data.goal) ctx.addIssue({ code: "custom", path: ["goal"], message: "Goal is required" });
 
-    return true;
-}, {
-    message: "Creating a profile requires filling all required fields.",
-    path: ["role"],
+        if (data.bio && !hasMinimumMenteeWordCount(data.bio)) {
+            ctx.addIssue({ code: "custom", path: ["bio"], message: getMenteeWordCountMessage("About yourself") });
+        }
+        if (data.motivation && !hasMinimumMenteeWordCount(data.motivation)) {
+            ctx.addIssue({ code: "custom", path: ["motivation"], message: getMenteeWordCountMessage("Why do you need a mentor?") });
+        }
+        if (data.goal && !hasMinimumMenteeWordCount(data.goal)) {
+            ctx.addIssue({ code: "custom", path: ["goal"], message: getMenteeWordCountMessage("What is your goal?") });
+        }
+    }
 });
 
 export function RegisterForm({
@@ -366,9 +378,9 @@ export function RegisterForm({
                                         name="bio"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>About Yourself</FormLabel>
+                                                <FormLabel>About Yourself *</FormLabel>
                                                 <FormControl>
-                                                    <Textarea placeholder="Brief introduction..." {...field} />
+                                                    <Textarea placeholder="Brief introduction... (more than 60 words)" {...field} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -383,7 +395,7 @@ export function RegisterForm({
                                                 <FormItem>
                                                     <FormLabel>Why do you need a mentor? *</FormLabel>
                                                     <FormControl>
-                                                        <Textarea placeholder="Explain your motivation..." {...field} />
+                                                        <Textarea placeholder="Explain your motivation... (more than 60 words)" {...field} />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
@@ -396,7 +408,7 @@ export function RegisterForm({
                                                 <FormItem>
                                                     <FormLabel>What is your goal? *</FormLabel>
                                                     <FormControl>
-                                                        <Textarea placeholder="Career or academic goals..." {...field} />
+                                                        <Textarea placeholder="Career or academic goals... (more than 60 words)" {...field} />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
