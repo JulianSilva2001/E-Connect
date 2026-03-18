@@ -8,20 +8,25 @@ import { processMentorshipRequest } from "@/actions/mentorship";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 
 export function RequestCard({ req }: { req: any }) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(false);
+    const [showRejectNote, setShowRejectNote] = useState(false);
+    const [rejectionNote, setRejectionNote] = useState("");
 
-    const handleAction = async (action: "ACCEPT" | "REJECT") => {
+    const handleAction = async (action: "ACCEPT" | "REJECT", note?: string) => {
         setLoading(true);
         try {
-            const res = await processMentorshipRequest(req.id, action);
+            const res = await processMentorshipRequest(req.id, action, note);
             if (res.error) {
                 toast.error(res.error);
             } else if (res.success) {
                 toast.success(res.success);
+                setShowRejectNote(false);
+                setRejectionNote("");
                 router.refresh();
             }
         } catch (err) {
@@ -117,12 +122,58 @@ export function RequestCard({ req }: { req: any }) {
                         variant="destructive"
                         className="flex-1"
                         size="sm"
-                        onClick={(e) => { e.stopPropagation(); handleAction("REJECT"); }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setExpanded(true);
+                            setShowRejectNote((value) => !value);
+                        }}
                         disabled={loading}
                     >
                         <X className="w-4 h-4 mr-2" /> Reject
                     </Button>
                 </div>
+                {showRejectNote ? (
+                    <div className="w-full rounded-lg border bg-muted/20 p-3">
+                        <label className="mb-2 block text-sm font-medium text-foreground">
+                            Rejection note
+                        </label>
+                        <Textarea
+                            value={rejectionNote}
+                            onChange={(e) => setRejectionNote(e.target.value)}
+                            placeholder="Optional note explaining why this request was rejected"
+                            disabled={loading}
+                            className="mb-3 min-h-24 bg-white"
+                        />
+                        <div className="flex gap-2">
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                className="flex-1"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAction("REJECT", rejectionNote);
+                                }}
+                                disabled={loading}
+                            >
+                                Confirm Reject
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowRejectNote(false);
+                                    setRejectionNote("");
+                                }}
+                                disabled={loading}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                ) : null}
             </CardFooter>
         </Card>
     );

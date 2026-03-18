@@ -12,6 +12,10 @@ import { revalidatePath } from 'next/cache';
 import { getAllowedMenteeBatches } from '@/lib/registration-batches';
 import { getMenteeWordCountMessage, hasMinimumMenteeWordCount } from '@/lib/mentee-text-validation';
 
+function normalizeIndexNumber(value?: string) {
+    return value?.trim().toUpperCase() || undefined;
+}
+
 const RegisterSchema = z.object({
     email: z.string().email(),
     password: z.string().min(6),
@@ -27,6 +31,7 @@ const RegisterSchema = z.object({
     expertise: z.string().optional(), // Comma separated string from form, split later
     preferredMentees: z.coerce.number().optional(),
     batch: z.string().optional(),
+    indexNumber: z.string().optional(),
     interests: z.string().optional(), // Comma separated string
     bio: z.string().optional(),
     portfolio: z.string().optional(),
@@ -45,6 +50,7 @@ const RegisterSchema = z.object({
 
     if (data.role === 'MENTEE') {
         if (!data.batch) ctx.addIssue({ code: 'custom', message: 'Batch is required', path: ['batch'] });
+        if (!data.indexNumber) ctx.addIssue({ code: 'custom', message: 'Index number is required', path: ['indexNumber'] });
         if (!data.bio) ctx.addIssue({ code: 'custom', message: 'About yourself is required', path: ['bio'] });
         if (!data.motivation) ctx.addIssue({ code: 'custom', message: 'Motivation is required', path: ['motivation'] });
         if (!data.goal) ctx.addIssue({ code: 'custom', message: 'Goal is required', path: ['goal'] });
@@ -71,7 +77,7 @@ export const register = async (values: z.infer<typeof RegisterSchema>) => {
     const {
         email, password, name, role, contactNumber,
         organization, jobTitle, graduationYear, linkedIn, expectations, expertise, preferredMentees,
-        batch, interests,
+        batch, indexNumber, interests,
         bio, portfolio, cvLink, github, menteeLinkedin, motivation, goal
     } = validatedFields.data;
 
@@ -89,6 +95,14 @@ export const register = async (values: z.infer<typeof RegisterSchema>) => {
         const allowedMenteeBatches = await getAllowedMenteeBatches();
         if (!batch || !allowedMenteeBatches.includes(batch)) {
             return { error: 'Please select a valid batch from the registration dropdown.' };
+        }
+
+        const normalizedIndexNumber = normalizeIndexNumber(indexNumber);
+        const existingIndex = await db.menteeProfile.findFirst({
+            where: { indexNumber: normalizedIndexNumber }
+        });
+        if (existingIndex) {
+            return { error: 'This index number is already registered.' };
         }
     }
 
@@ -124,6 +138,7 @@ export const register = async (values: z.infer<typeof RegisterSchema>) => {
                 await tx.menteeProfile.create({
                     data: {
                         userId: user.id,
+                        indexNumber: normalizeIndexNumber(indexNumber),
                         contactNumber,
                         batch: batch || undefined,
                         interests: interests ? interests.split(',').map(s => s.trim()) : [],
@@ -168,6 +183,7 @@ const UpdateProfileSchema = z.object({
     expertise: z.string().optional(),
     preferredMentees: z.coerce.number().optional(),
     batch: z.string().optional(),
+    indexNumber: z.string().optional(),
     interests: z.string().optional(),
     bio: z.string().optional(),
     portfolio: z.string().optional(),
@@ -185,6 +201,7 @@ const UpdateProfileSchema = z.object({
     }
     if (data.role === 'MENTEE') {
         if (!data.batch) ctx.addIssue({ code: 'custom', message: 'Batch is required', path: ['batch'] });
+        if (!data.indexNumber) ctx.addIssue({ code: 'custom', message: 'Index number is required', path: ['indexNumber'] });
         if (!data.bio) ctx.addIssue({ code: 'custom', message: 'About yourself is required', path: ['bio'] });
         if (!data.motivation) ctx.addIssue({ code: 'custom', message: 'Motivation is required', path: ['motivation'] });
         if (!data.goal) ctx.addIssue({ code: 'custom', message: 'Goal is required', path: ['goal'] });
@@ -224,11 +241,24 @@ export async function updateProfile(values: z.infer<typeof UpdateProfileSchema>)
     const {
         name, role, contactNumber,
         organization, jobTitle, graduationYear, linkedIn, expectations, expertise, preferredMentees,
-        batch, interests, bio, portfolio, cvLink, github, menteeLinkedin, motivation, goal
+        batch, indexNumber, interests, bio, portfolio, cvLink, github, menteeLinkedin, motivation, goal
     } = validatedFields.data;
 
     if (role !== user.role) {
         return { error: 'Role mismatch' };
+    }
+
+    if (role === 'MENTEE') {
+        const normalizedIndexNumber = normalizeIndexNumber(indexNumber);
+        const existingIndex = await db.menteeProfile.findFirst({
+            where: {
+                indexNumber: normalizedIndexNumber,
+                NOT: { id: user.menteeProfile?.id }
+            }
+        });
+        if (existingIndex) {
+            return { error: 'This index number is already registered.' };
+        }
     }
 
     try {
@@ -260,6 +290,7 @@ export async function updateProfile(values: z.infer<typeof UpdateProfileSchema>)
                     where: { id: user.menteeProfile.id },
                     data: {
                         contactNumber,
+                        indexNumber: normalizeIndexNumber(indexNumber),
                         batch: batch || undefined,
                         interests: interests ? interests.split(',').map(s => s.trim()).filter(Boolean) : [],
                         bio: bio || undefined,

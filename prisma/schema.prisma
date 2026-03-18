@@ -48,6 +48,7 @@ model MenteeProfile {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
   userId          String   @unique @db.ObjectId
   user            User     @relation(fields: [userId], references: [id])
+  indexNumber     String?
   contactNumber   String?
   preferencesSubmitted Boolean @default(false)
   interests       String[]
@@ -82,6 +83,7 @@ model Selection {
   mentorId  String   @db.ObjectId
   rank      Int
   status    SelectionStatus @default(PENDING)      
+  rejectionNote String?
   
   mentee    MenteeProfile @relation(fields: [menteeId], references: [id])
   mentor    MentorProfile @relation("MentorSelections", fields: [mentorId], references: [id])

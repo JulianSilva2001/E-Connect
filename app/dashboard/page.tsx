@@ -78,7 +78,7 @@ export default async function DashboardPage() {
     let allMentees: (User & { menteeProfile: MenteeProfile | null })[] = [];
 
     // Always fetch mentors for both roles (Mentors want to see other mentors, Mentees need to select)
-    allMentors = await getMentors();
+    allMentors = await getMentors({ includeUnavailable: true });
 
     if (user.role === 'MENTOR') {
         // We might still want mentees for "My Mentees" later, but for now user said "show other mentors instead of students"
@@ -96,6 +96,9 @@ export default async function DashboardPage() {
     const preferencesLocked = user.role === "MENTEE"
         ? Boolean((user.menteeProfile as any)?.preferencesSubmitted) && !allMentorSelectionsRejected
         : false;
+    const selectableMentors = user.role === "MENTEE"
+        ? allMentors.filter((mentor: any) => mentor.availability !== "Unavailable")
+        : allMentors;
 
     // Feedback data — available for both roles
     const [generalFeedbacks, userHasSession] = await Promise.all([
@@ -339,6 +342,16 @@ export default async function DashboardPage() {
                                             <div className="text-sm text-gray-500 mt-1 line-clamp-2">
                                                 {s.mentor.bio}
                                             </div>
+                                            {s.status === "REJECTED" && (s as any).rejectionNote ? (
+                                                <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                                                    <div className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                                                        Rejection Note
+                                                    </div>
+                                                    <div className="mt-1 text-sm text-red-700">
+                                                        {(s as any).rejectionNote}
+                                                    </div>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ))}
                                 </div>
@@ -387,7 +400,7 @@ export default async function DashboardPage() {
                                             mentorName: s.mentor.user.name || "Unknown",
                                             mentorRole: s.mentor.jobTitle || "Mentor",
                                         })) || []}
-                                        allMentors={allMentors.map((mentor: any) => ({
+                                        allMentors={selectableMentors.map((mentor: any) => ({
                                             mentorId: mentor.id,
                                             mentorName: mentor.name || "Unknown",
                                             mentorRole: mentor.jobTitle || mentor.role || "Mentor",
@@ -554,6 +567,7 @@ export default async function DashboardPage() {
                                     role: "MENTEE",
                                     contactNumber: (user.menteeProfile as any)?.contactNumber || "",
                                     batch: user.menteeProfile?.batch || "",
+                                    indexNumber: user.menteeProfile?.indexNumber || "",
                                     interests: user.menteeProfile?.interests?.join(", ") || "",
                                     bio: user.menteeProfile?.bio || "",
                                     portfolio: user.menteeProfile?.portfolio || "",
