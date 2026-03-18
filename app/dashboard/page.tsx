@@ -197,7 +197,16 @@ export default async function DashboardPage() {
 
                     <TabsContent value="instructions" className="animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
                         {user.role === 'MENTEE' ? (
-                            <div className="grid md:grid-cols-3 gap-6">
+                            <div className="space-y-6">
+                                {allMentorSelectionsRejected && (
+                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                                        <h2 className="text-lg font-semibold text-amber-900">All mentor requests were rejected</h2>
+                                        <p className="mt-2 text-sm text-amber-800">
+                                            Your current set of mentor requests has been rejected. You can update your preferences and apply again from the Select Mentors tab.
+                                        </p>
+                                    </div>
+                                )}
+                                <div className="grid md:grid-cols-3 gap-6">
                                 {/* Welcome Card */}
                                 <div className="md:col-span-2 bg-white rounded-2xl p-8 border shadow-sm">
                                     <div className="flex items-center gap-3 mb-6">
@@ -255,6 +264,7 @@ export default async function DashboardPage() {
                                             </div>
                                         )}
                                     </div>
+                                </div>
                                 </div>
                             </div>
                         ) : (
@@ -362,6 +372,14 @@ export default async function DashboardPage() {
                     {user.role === 'MENTEE' && (
                         <>
                             <TabsContent value="select-mentors" className="mt-6 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
+                                {allMentorSelectionsRejected && (
+                                    <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                                        <h2 className="text-lg font-semibold text-amber-900">You can apply again</h2>
+                                        <p className="mt-2 text-sm text-amber-800">
+                                            All mentors in your previous list rejected the request. Update your mentor list below and confirm a new preference order.
+                                        </p>
+                                    </div>
+                                )}
                                 <div className="bg-white border rounded-2xl shadow-sm p-6 mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                     <div>
                                         <h2 className="text-xl font-semibold">Confirm Your Preference Order</h2>

@@ -4,7 +4,7 @@
 import { db } from '@/lib/db';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
-import { sendMentorRequestNotification } from '@/lib/notifications';
+import { sendMentorRequestNotification, sendMenteeAllRejectedNotification } from '@/lib/notifications';
 
 import { SelectionStatus } from '@prisma/client';
 
@@ -55,6 +55,33 @@ async function notifyMentorForActionableSelection(selectionId: string, reason: "
         });
     } catch (error) {
         console.error("Failed to send mentor notification:", error);
+    }
+}
+
+async function notifyMenteeAllRejected(menteeId: string) {
+    const mentee = await db.menteeProfile.findUnique({
+        where: { id: menteeId },
+        include: {
+            user: true,
+            selections: true,
+        },
+    });
+
+    if (!mentee?.user?.email) {
+        return;
+    }
+
+    if (!hasAllSelectionsRejected(mentee.selections)) {
+        return;
+    }
+
+    try {
+        await sendMenteeAllRejectedNotification({
+            menteeEmail: mentee.user.email,
+            menteeName: mentee.user.name || "there",
+        });
+    } catch (error) {
+        console.error("Failed to send mentee rejection notification:", error);
     }
 }
 
@@ -585,7 +612,14 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
 
     try {
         const selection = await db.selection.findUnique({
-            where: { id: selectionId }
+            where: { id: selectionId },
+            include: {
+                mentee: {
+                    include: {
+                        user: true,
+                    },
+                },
+            },
         });
 
         if (!selection) return { error: "Request not found" };
@@ -635,6 +669,8 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
             const nextActionableSelectionId = await findNextActionableSelectionId(selection.menteeId);
             if (nextActionableSelectionId) {
                 await notifyMentorForActionableSelection(nextActionableSelectionId, "promoted_after_rejection");
+            } else {
+                await notifyMenteeAllRejected(selection.menteeId);
             }
         }
 
