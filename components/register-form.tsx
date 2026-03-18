@@ -40,6 +40,7 @@ const RegisterSchema = z.object({
     expertise: z.string().optional(),
     preferredMentees: z.coerce.number().optional(),
     batch: z.string().optional(),
+    indexNumber: z.string().optional(),
     interests: z.string().optional(),
     bio: z.string().optional(),
     portfolio: z.string().optional(),
@@ -58,6 +59,7 @@ const RegisterSchema = z.object({
 
     if (data.role === "MENTEE") {
         if (!data.batch) ctx.addIssue({ code: "custom", path: ["batch"], message: "Batch is required" });
+        if (!data.indexNumber) ctx.addIssue({ code: "custom", path: ["indexNumber"], message: "Index number is required" });
         if (!data.bio) ctx.addIssue({ code: "custom", path: ["bio"], message: "About yourself is required" });
         if (!data.motivation) ctx.addIssue({ code: "custom", path: ["motivation"], message: "Motivation is required" });
         if (!data.goal) ctx.addIssue({ code: "custom", path: ["goal"], message: "Goal is required" });
@@ -100,6 +102,7 @@ export function RegisterForm({
             expertise: "",
             preferredMentees: 2,
             batch: "",
+            indexNumber: "",
             interests: "",
             bio: "",
             portfolio: "",
@@ -358,6 +361,22 @@ export function RegisterForm({
                                                 </FormItem>
                                             )}
                                         />
+                                        <FormField
+                                            control={form.control}
+                                            name="indexNumber"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Index Number *</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="210678E" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-4">
                                         <FormField
                                             control={form.control}
                                             name="interests"

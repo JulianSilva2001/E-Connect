@@ -133,6 +133,21 @@ export default async function AdminPage() {
       .values()
   ).sort((a, b) => a.mentorName.localeCompare(b.mentorName));
 
+  const mentorRequestGroups = mentors
+    .map((mentor) => ({
+      id: mentor.id,
+      mentorName: mentor.user.name || "Unknown",
+      mentorEmail: mentor.user.email,
+      preferredMentees: mentor.preferredMentees,
+      requests: allocations
+        .filter((item) => item.mentor.id === mentor.id)
+        .sort((a, b) => {
+          if (a.rank !== b.rank) return a.rank - b.rank;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }),
+    }))
+    .sort((a, b) => a.mentorName.localeCompare(b.mentorName));
+
   return (
     <div className="min-h-screen bg-neutral-50/50 flex flex-col">
       <Navigation variant="dashboard" user={session.user} />
@@ -148,7 +163,7 @@ export default async function AdminPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <StatCardLink title="Mentors" value={mentorsCount} href="#all-mentors" />
           <StatCardLink title="Mentees" value={menteesCount} href="#all-mentees" />
-          <StatCard title="All Requests" value={selectionsCount} />
+          <StatCardLink title="All Requests" value={selectionsCount} href="#requests-by-mentor" />
           <StatCard title="Accepted" value={acceptedCount} />
           <StatCard title="Pending" value={pendingCount} />
           <StatCard title="Rejected" value={rejectedCount} />
@@ -189,13 +204,91 @@ export default async function AdminPage() {
                         .map((mentee) => (
                           <div key={mentee.id} className="rounded-md border p-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium text-sm">{mentee.name}</span>
+                              <Link
+                                href={`/admin/mentees/${mentee.id}`}
+                                className="text-sm font-medium text-primary hover:underline"
+                              >
+                                {mentee.name}
+                              </Link>
                               <Badge variant="secondary">Rank {mentee.rank}</Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">{mentee.email}</p>
                           </div>
                         ))}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card id="requests-by-mentor" className="border shadow-sm mb-8 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Requests by Mentor</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {mentorRequestGroups.length === 0 ? (
+              <p className="text-muted-foreground">No mentors found.</p>
+            ) : (
+              <div className="space-y-4">
+                {mentorRequestGroups.map((group) => (
+                  <div key={group.id} className="rounded-xl border bg-white p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-base">{group.mentorName}</h3>
+                        <p className="text-sm text-muted-foreground">{group.mentorEmail}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+                          {group.requests.length} request{group.requests.length === 1 ? "" : "s"}
+                        </Badge>
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                          Capacity {group.preferredMentees}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {group.requests.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No requests received yet.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b text-left">
+                              <th className="py-3 pr-4 font-semibold">Mentee</th>
+                              <th className="py-3 pr-4 font-semibold">Preference</th>
+                              <th className="py-3 pr-4 font-semibold">Status</th>
+                              <th className="py-3 pr-4 font-semibold">Requested On</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.requests.map((request) => (
+                              <tr key={request.id} className="border-b last:border-b-0">
+                                <td className="py-3 pr-4">
+                                  <div className="font-medium">
+                                    <Link
+                                      href={`/admin/mentees/${request.mentee.id}`}
+                                      className="text-primary hover:underline"
+                                    >
+                                      {request.mentee.user.name || "Unknown"}
+                                    </Link>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{request.mentee.user.email}</div>
+                                </td>
+                                <td className="py-3 pr-4">#{request.rank}</td>
+                                <td className="py-3 pr-4">
+                                  <StatusBadge status={request.status} />
+                                </td>
+                                <td className="py-3 pr-4 text-muted-foreground">
+                                  {allocationDateFormatter.format(new Date(request.createdAt))}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -260,6 +353,7 @@ export default async function AdminPage() {
                     <tr className="border-b text-left">
                       <th className="py-3 pr-4 font-semibold">Name</th>
                       <th className="py-3 pr-4 font-semibold">Email</th>
+                      <th className="py-3 pr-4 font-semibold">Index Number</th>
                       <th className="py-3 pr-4 font-semibold">Batch</th>
                       <th className="py-3 pr-4 font-semibold">Interests</th>
                       <th className="py-3 pr-4 font-semibold">Actions</th>
@@ -268,8 +362,16 @@ export default async function AdminPage() {
                   <tbody>
                     {mentees.map((mentee) => (
                       <tr key={mentee.id} className="border-b last:border-b-0">
-                        <td className="py-3 pr-4 font-medium">{mentee.user.name || "Unknown"}</td>
+                        <td className="py-3 pr-4 font-medium">
+                          <Link
+                            href={`/admin/mentees/${mentee.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {mentee.user.name || "Unknown"}
+                          </Link>
+                        </td>
                         <td className="py-3 pr-4 text-muted-foreground">{mentee.user.email}</td>
+                        <td className="py-3 pr-4">{mentee.indexNumber || "-"}</td>
                         <td className="py-3 pr-4">{mentee.batch || "-"}</td>
                         <td className="py-3 pr-4">{mentee.interests.length ? mentee.interests.join(", ") : "-"}</td>
                         <td className="py-3 pr-4">
@@ -289,7 +391,7 @@ export default async function AdminPage() {
 
         <Card className="border shadow-sm">
           <CardHeader>
-            <CardTitle>Mentor-Mentee Allocation</CardTitle>
+            <CardTitle>All Requests Flat View</CardTitle>
           </CardHeader>
           <CardContent>
             {allocations.length === 0 ? (
@@ -310,7 +412,14 @@ export default async function AdminPage() {
                     {allocations.map((item) => (
                       <tr key={item.id} className="border-b last:border-b-0">
                         <td className="py-3 pr-4">
-                          <div className="font-medium">{item.mentee.user.name || "Unknown"}</div>
+                          <div className="font-medium">
+                            <Link
+                              href={`/admin/mentees/${item.mentee.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {item.mentee.user.name || "Unknown"}
+                            </Link>
+                          </div>
                           <div className="text-xs text-muted-foreground">{item.mentee.user.email}</div>
                         </td>
                         <td className="py-3 pr-4">

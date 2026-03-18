@@ -23,6 +23,7 @@ const ProfileSchema = z.object({
     expertise: z.string().optional(),
     preferredMentees: z.coerce.number().optional(),
     batch: z.string().optional(),
+    indexNumber: z.string().optional(),
     interests: z.string().optional(),
     bio: z.string().optional(),
     portfolio: z.string().optional(),
@@ -40,6 +41,7 @@ const ProfileSchema = z.object({
     }
     if (data.role === "MENTEE") {
         if (!data.batch) ctx.addIssue({ code: "custom", path: ["batch"], message: "Batch is required" });
+        if (!data.indexNumber) ctx.addIssue({ code: "custom", path: ["indexNumber"], message: "Index number is required" });
         if (!data.bio) ctx.addIssue({ code: "custom", path: ["bio"], message: "About yourself is required" });
         if (!data.motivation) ctx.addIssue({ code: "custom", path: ["motivation"], message: "Motivation is required" });
         if (!data.goal) ctx.addIssue({ code: "custom", path: ["goal"], message: "Goal is required" });
@@ -171,6 +173,9 @@ export function ProfileEditor({ initialValues }: { initialValues: ProfileValues 
                         <div className="space-y-4">
                             <div className="grid md:grid-cols-2 gap-4">
                                 <ProfileInput form={form} name="batch" label="Batch" disabled={isPending} />
+                                <ProfileInput form={form} name="indexNumber" label="Index Number" disabled={isPending} />
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-4">
                                 <ProfileInput form={form} name="interests" label="Areas of Interest" disabled={isPending} />
                             </div>
                             <ProfileTextarea form={form} name="bio" label="About Yourself" disabled={isPending} />

@@ -72,11 +72,44 @@ async function findNextActionableSelectionId(menteeId: string) {
         const higherRankedSelections = selections.filter(s => s.rank < selection.rank);
         const isActionable = higherRankedSelections.every(s => s.status === 'REJECTED');
         if (isActionable) {
+            const hasCapacity = await mentorHasAvailableCapacity(selection.mentorId);
+            if (!hasCapacity) {
+                // Skip mentors who are already full so the request can move to the next ranked option.
+                await db.selection.update({
+                    where: { id: selection.id },
+                    data: { status: SelectionStatus.REJECTED }
+                });
+                selection.status = SelectionStatus.REJECTED;
+                continue;
+            }
+
             return selection.id;
         }
     }
 
     return null;
+}
+
+async function mentorHasAvailableCapacity(mentorId: string) {
+    const mentor = await db.mentorProfile.findUnique({
+        where: { id: mentorId },
+        include: {
+            selections: {
+                where: { status: SelectionStatus.ACCEPTED }
+            }
+        }
+    });
+
+    if (!mentor) {
+        return false;
+    }
+
+    const capacity = mentor.preferredMentees || 0;
+    if (capacity <= 0) {
+        return true;
+    }
+
+    return mentor.selections.length < capacity;
 }
 
 export async function selectMentor(mentorId: string, rank: number) {
@@ -108,6 +141,11 @@ export async function selectMentor(mentorId: string, rank: number) {
 
     if (rank < 1 || rank > 5) {
         return { error: "Rank must be between 1 and 5." };
+    }
+
+    const hasCapacity = await mentorHasAvailableCapacity(mentorId);
+    if (!hasCapacity) {
+        return { error: "This mentor is already full and cannot receive new requests." };
     }
 
     try {
@@ -198,6 +236,11 @@ export async function addMentorToPreferences(mentorId: string) {
 
     if (!nextRank) {
         return { error: "No preference slot is available." };
+    }
+
+    const hasCapacity = await mentorHasAvailableCapacity(mentorId);
+    if (!hasCapacity) {
+        return { error: "This mentor is already full and cannot receive new requests." };
     }
 
     try {
@@ -401,10 +444,12 @@ export async function confirmMentorPreferences() {
         const actionableSelectionId = await findNextActionableSelectionId(user.menteeProfile.id);
         if (actionableSelectionId) {
             await notifyMentorForActionableSelection(actionableSelectionId, "rank_1");
+            revalidatePath('/dashboard');
+            return { success: "Preferences confirmed. Requests were sent to the current actionable mentor." };
         }
 
         revalidatePath('/dashboard');
-        return { success: "Preferences confirmed. Requests were sent to the current actionable mentor." };
+        return { success: "Preferences confirmed. No request was sent because the remaining preferred mentors are already full or unavailable." };
     } catch (error) {
         console.error("Failed to confirm mentor preferences:", error);
         if (error instanceof Error) {
@@ -419,7 +464,9 @@ export async function confirmMentorPreferences() {
     }
 }
 
-export async function getMentors() {
+export async function getMentors(options?: { includeUnavailable?: boolean }) {
+    const includeUnavailable = options?.includeUnavailable ?? false;
+
     const mentors = await db.user.findMany({
         where: { role: 'MENTOR' },
         include: {
@@ -439,7 +486,7 @@ export async function getMentors() {
         const capacity = profile?.preferredMentees || 0;
         const availableSlots = Math.max(0, capacity - acceptedCount);
 
-        return {
+        const mentor = {
             id: profile?.id,
             userId: m.id,
             name: m.name,
@@ -460,7 +507,9 @@ export async function getMentors() {
             availableSlots: availableSlots,
             capacity: capacity
         };
-    });
+
+        return mentor;
+    }).filter((mentor) => includeUnavailable || mentor.availability !== "Unavailable");
 }
 
 export async function getMentorRequests() {
@@ -521,7 +570,7 @@ export async function getMentorRequests() {
     }));
 }
 
-export async function processMentorshipRequest(selectionId: string, action: "ACCEPT" | "REJECT") {
+export async function processMentorshipRequest(selectionId: string, action: "ACCEPT" | "REJECT", rejectionNote?: string) {
     const session = await auth();
     if (!session?.user?.email) return { error: "Not authenticated" };
 
@@ -573,13 +622,14 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
             // For now, let's just update this one.
             await db.selection.update({
                 where: { id: selectionId },
-                data: { status: 'ACCEPTED' }
+                data: { status: 'ACCEPTED', rejectionNote: null }
             });
 
         } else if (action === "REJECT") {
+            const normalizedRejectionNote = rejectionNote?.trim() || undefined;
             await db.selection.update({
                 where: { id: selectionId },
-                data: { status: 'REJECTED' }
+                data: { status: 'REJECTED', rejectionNote: normalizedRejectionNote }
             });
 
             const nextActionableSelectionId = await findNextActionableSelectionId(selection.menteeId);
