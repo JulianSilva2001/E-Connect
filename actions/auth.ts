@@ -11,6 +11,7 @@ import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getAllowedMenteeBatches } from '@/lib/registration-batches';
 import { getMenteeWordCountMessage, hasMinimumMenteeWordCount } from '@/lib/mentee-text-validation';
+import { autoRejectActionablePendingSelectionsForFullMentor } from '@/lib/mentor-request-capacity';
 
 function normalizeIndexNumber(value?: string) {
     return value?.trim().toUpperCase() || undefined;
@@ -304,6 +305,10 @@ export async function updateProfile(values: z.infer<typeof UpdateProfileSchema>)
                 });
             }
         });
+
+        if (role === 'MENTOR' && user.mentorProfile) {
+            await autoRejectActionablePendingSelectionsForFullMentor(user.mentorProfile.id);
+        }
 
         revalidatePath('/dashboard');
         return { success: 'Profile updated!' };

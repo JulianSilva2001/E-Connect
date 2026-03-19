@@ -17,6 +17,21 @@ const allocationDateFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Colombo",
 });
 
+function isMentorReceivedRequest(selection: {
+  rank: number;
+  mentee: {
+    preferencesSubmitted?: boolean | null;
+    selections: Array<{ rank: number; status: "PENDING" | "ACCEPTED" | "REJECTED" }>;
+  };
+}) {
+  if (!selection.mentee.preferencesSubmitted) {
+    return false;
+  }
+
+  const higherRankedSelections = selection.mentee.selections.filter((item) => item.rank < selection.rank);
+  return higherRankedSelections.every((item) => item.status === "REJECTED");
+}
+
 export default async function AdminPage() {
   const session = await auth();
 
@@ -67,6 +82,12 @@ export default async function AdminPage() {
                 id: true,
                 name: true,
                 email: true,
+              },
+            },
+            selections: {
+              select: {
+                rank: true,
+                status: true,
               },
             },
           },
@@ -140,13 +161,16 @@ export default async function AdminPage() {
       mentorEmail: mentor.user.email,
       preferredMentees: mentor.preferredMentees,
       requests: allocations
-        .filter((item) => item.mentor.id === mentor.id)
+        .filter((item) => item.mentor.id === mentor.id && isMentorReceivedRequest(item))
         .sort((a, b) => {
           if (a.rank !== b.rank) return a.rank - b.rank;
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         }),
     }))
     .sort((a, b) => a.mentorName.localeCompare(b.mentorName));
+
+  const totalSpots = mentors.reduce((sum, mentor) => sum + (mentor.preferredMentees || 0), 0);
+  const filledSpots = acceptedCount;
 
   return (
     <div className="min-h-screen bg-neutral-50/50 flex flex-col">
@@ -160,9 +184,11 @@ export default async function AdminPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">
           <StatCardLink title="Mentors" value={mentorsCount} href="#all-mentors" />
           <StatCardLink title="Mentees" value={menteesCount} href="#all-mentees" />
+          <StatCard title="Total Spots" value={totalSpots} />
+          <StatCard title="Filled Spots" value={filledSpots} />
           <StatCardLink title="All Requests" value={selectionsCount} href="#requests-by-mentor" />
           <StatCard title="Accepted" value={acceptedCount} />
           <StatCard title="Pending" value={pendingCount} />
@@ -241,7 +267,7 @@ export default async function AdminPage() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-                          {group.requests.length} request{group.requests.length === 1 ? "" : "s"}
+                          {group.requests.length} received request{group.requests.length === 1 ? "" : "s"}
                         </Badge>
                         <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
                           Capacity {group.preferredMentees}

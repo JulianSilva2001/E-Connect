@@ -1,18 +1,20 @@
 
 'use server';
 
-import { db } from '@/lib/db';
+import { SelectionStatus } from '@prisma/client';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
-import { sendMentorRequestNotification, sendMenteeAllRejectedNotification } from '@/lib/notifications';
 
-import { SelectionStatus } from '@prisma/client';
-
-function hasAllSelectionsRejected(
-    selections: Array<{ status: SelectionStatus | string }>
-) {
-    return selections.length > 0 && selections.every((selection) => selection.status === SelectionStatus.REJECTED);
-}
+import { db } from '@/lib/db';
+import {
+    autoRejectActionablePendingSelectionsForFullMentor,
+    findNextActionableSelectionId,
+    getActionablePendingSelectionsForMentor,
+    hasAllSelectionsRejected,
+    mentorHasAvailableCapacity,
+    notifyMenteeAllRejected,
+    notifyMentorForActionableSelection,
+} from '@/lib/mentor-request-capacity';
 
 function isPreferenceOrderLocked(profile: {
     preferencesSubmitted?: boolean | null;
@@ -23,120 +25,6 @@ function isPreferenceOrderLocked(profile: {
     }
 
     return !hasAllSelectionsRejected(profile.selections || []);
-}
-
-async function notifyMentorForActionableSelection(selectionId: string, reason: "rank_1" | "promoted_after_rejection") {
-    const selection = await db.selection.findUnique({
-        where: { id: selectionId },
-        include: {
-            mentor: {
-                include: {
-                    user: true
-                }
-            },
-            mentee: {
-                include: {
-                    user: true
-                }
-            }
-        }
-    });
-
-    if (!selection?.mentor?.user?.email || !selection?.mentee?.user?.name) {
-        return;
-    }
-
-    try {
-        await sendMentorRequestNotification({
-            mentorEmail: selection.mentor.user.email,
-            mentorName: selection.mentor.user.name || "Mentor",
-            menteeName: selection.mentee.user.name || "A mentee",
-            reason,
-        });
-    } catch (error) {
-        console.error("Failed to send mentor notification:", error);
-    }
-}
-
-async function notifyMenteeAllRejected(menteeId: string) {
-    const mentee = await db.menteeProfile.findUnique({
-        where: { id: menteeId },
-        include: {
-            user: true,
-            selections: true,
-        },
-    });
-
-    if (!mentee?.user?.email) {
-        return;
-    }
-
-    if (!hasAllSelectionsRejected(mentee.selections)) {
-        return;
-    }
-
-    try {
-        await sendMenteeAllRejectedNotification({
-            menteeEmail: mentee.user.email,
-            menteeName: mentee.user.name || "there",
-        });
-    } catch (error) {
-        console.error("Failed to send mentee rejection notification:", error);
-    }
-}
-
-async function findNextActionableSelectionId(menteeId: string) {
-    const selections = await db.selection.findMany({
-        where: { menteeId },
-        orderBy: { rank: 'asc' }
-    });
-
-    for (const selection of selections) {
-        if (selection.status !== 'PENDING') {
-            continue;
-        }
-
-        const higherRankedSelections = selections.filter(s => s.rank < selection.rank);
-        const isActionable = higherRankedSelections.every(s => s.status === 'REJECTED');
-        if (isActionable) {
-            const hasCapacity = await mentorHasAvailableCapacity(selection.mentorId);
-            if (!hasCapacity) {
-                // Skip mentors who are already full so the request can move to the next ranked option.
-                await db.selection.update({
-                    where: { id: selection.id },
-                    data: { status: SelectionStatus.REJECTED }
-                });
-                selection.status = SelectionStatus.REJECTED;
-                continue;
-            }
-
-            return selection.id;
-        }
-    }
-
-    return null;
-}
-
-async function mentorHasAvailableCapacity(mentorId: string) {
-    const mentor = await db.mentorProfile.findUnique({
-        where: { id: mentorId },
-        include: {
-            selections: {
-                where: { status: SelectionStatus.ACCEPTED }
-            }
-        }
-    });
-
-    if (!mentor) {
-        return false;
-    }
-
-    const capacity = mentor.preferredMentees || 0;
-    if (capacity <= 0) {
-        return true;
-    }
-
-    return mentor.selections.length < capacity;
 }
 
 export async function selectMentor(mentorId: string, rank: number) {
@@ -552,32 +440,7 @@ export async function getMentorRequests() {
 
     const mentorId = user.mentorProfile.id;
 
-    // Fetch all pending selections for this mentor
-    const pendingSelections = await db.selection.findMany({
-        where: {
-            mentorId: mentorId,
-            status: 'PENDING'
-        },
-        include: {
-            mentee: {
-                include: {
-                    user: true,
-                    selections: true // We need this to check higher ranks
-                }
-            }
-        },
-        orderBy: { rank: 'asc' }
-    });
-
-    // Filter selections: A request is valid ONLY IF all higher-ranked selections (rank < current) are REJECTED.
-    const validRequests = pendingSelections.filter(selection => {
-        if (!(selection.mentee as any).preferencesSubmitted) {
-            return false;
-        }
-        const higherRankedSelections = selection.mentee.selections.filter(s => s.rank < selection.rank);
-        // All higher ranked must be rejected
-        return higherRankedSelections.every(s => s.status === 'REJECTED');
-    });
+    const validRequests = await getActionablePendingSelectionsForMentor(mentorId);
 
     return validRequests.map(s => ({
         id: s.id,
@@ -658,6 +521,8 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
                 where: { id: selectionId },
                 data: { status: 'ACCEPTED', rejectionNote: null }
             });
+
+            await autoRejectActionablePendingSelectionsForFullMentor(user.mentorProfile.id);
 
         } else if (action === "REJECT") {
             const normalizedRejectionNote = rejectionNote?.trim() || undefined;
