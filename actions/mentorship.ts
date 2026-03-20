@@ -576,6 +576,8 @@ export async function getAcceptedMentees() {
         id: s.mentee.id,
         name: s.mentee.user.name,
         email: s.mentee.user.email,
+        indexNumber: s.mentee.indexNumber,
+        contactNumber: s.mentee.contactNumber,
         batch: s.mentee.batch,
         interests: s.mentee.interests,
         // Detailed info
