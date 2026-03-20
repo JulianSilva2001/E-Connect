@@ -138,7 +138,8 @@ export default async function DashboardPage() {
                 </div>
 
                 <Tabs defaultValue={user.role === 'MENTOR' ? "requests" : "instructions"} className="w-full space-y-8">
-                    <TabsList className="bg-white border p-1 rounded-xl shadow-sm inline-flex h-auto gap-1">
+                    <div className="overflow-x-auto pb-2">
+                    <TabsList className="bg-white border p-1 rounded-xl shadow-sm inline-flex h-auto min-w-max gap-1">
                         <TabsTrigger
                             value="instructions"
                             className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
@@ -194,6 +195,7 @@ export default async function DashboardPage() {
                             Profile
                         </TabsTrigger>
                     </TabsList>
+                    </div>
 
                     <TabsContent value="instructions" className="animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
                         {user.role === 'MENTEE' ? (
