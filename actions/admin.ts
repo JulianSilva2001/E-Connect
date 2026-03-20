@@ -1,10 +1,17 @@
 'use server';
 
+import { SelectionStatus } from '@prisma/client';
+
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { isAdminEmail } from '@/lib/admin';
 import { revalidatePath } from 'next/cache';
 import { normalizeBatchList } from '@/lib/registration-batches';
+import {
+    findNextActionableSelectionId,
+    notifyMenteeAllRejected,
+    notifyMentorForActionableSelection,
+} from '@/lib/mentor-request-capacity';
 
 export async function deleteUserAccount(userId: string) {
     const session = await auth();
@@ -103,5 +110,62 @@ export async function updateRegistrationBatches(rawBatches: string) {
     } catch (error) {
         console.error('Failed to update registration batches:', error);
         return { error: 'Failed to update registration batches.' };
+    }
+}
+
+export async function adminRejectMentorshipRequest(selectionId: string) {
+    const session = await auth();
+
+    if (!session?.user?.email || !isAdminEmail(session.user.email)) {
+        return { error: 'Unauthorized' };
+    }
+
+    const selection = await db.selection.findUnique({
+        where: { id: selectionId },
+        include: {
+            mentee: true,
+            mentor: {
+                include: {
+                    user: {
+                        select: {
+                            name: true,
+                            email: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    if (!selection) {
+        return { error: 'Request not found.' };
+    }
+
+    if (selection.status === SelectionStatus.REJECTED) {
+        return { error: 'This request is already rejected.' };
+    }
+
+    try {
+        await db.selection.update({
+            where: { id: selectionId },
+            data: {
+                status: SelectionStatus.REJECTED,
+                rejectionNote: 'Rejected by admin.',
+            },
+        });
+
+        const nextActionableSelectionId = await findNextActionableSelectionId(selection.menteeId);
+        if (nextActionableSelectionId) {
+            await notifyMentorForActionableSelection(nextActionableSelectionId, 'promoted_after_rejection');
+        } else {
+            await notifyMenteeAllRejected(selection.menteeId);
+        }
+
+        revalidatePath('/admin');
+        revalidatePath('/dashboard');
+        return { success: 'Request rejected.' };
+    } catch (error) {
+        console.error('Failed to reject mentorship request:', error);
+        return { error: 'Failed to reject request.' };
     }
 }

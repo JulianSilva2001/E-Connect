@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { AdminDeleteUserButton } from "@/components/admin-delete-user-button";
+import { AdminRejectRequestButton } from "@/components/admin-reject-request-button";
 import { AdminRegistrationBatchesForm } from "@/components/admin-registration-batches-form";
 import { getAllowedMenteeBatches } from "@/lib/registration-batches";
 
@@ -46,10 +47,6 @@ export default async function AdminPage() {
   const [
     mentorsCount,
     menteesCount,
-    selectionsCount,
-    acceptedCount,
-    pendingCount,
-    rejectedCount,
     allocations,
     mentors,
     mentees,
@@ -57,10 +54,6 @@ export default async function AdminPage() {
   ] = await Promise.all([
     db.mentorProfile.count(),
     db.menteeProfile.count(),
-    db.selection.count(),
-    db.selection.count({ where: { status: "ACCEPTED" } }),
-    db.selection.count({ where: { status: "PENDING" } }),
-    db.selection.count({ where: { status: "REJECTED" } }),
     db.selection.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -114,10 +107,27 @@ export default async function AdminPage() {
             email: true,
           },
         },
+        selections: {
+          select: {
+            status: true,
+          },
+        },
       },
     }),
     getAllowedMenteeBatches(),
   ]);
+
+  const pendingCount = allocations.filter(
+    (item) => item.status === "PENDING" && isMentorReceivedRequest(item)
+  ).length;
+  const acceptedCount = allocations.filter((item) => item.status === "ACCEPTED").length;
+  const fullyRejectedMentees = mentees.filter(
+    (mentee) =>
+      mentee.preferencesSubmitted &&
+      mentee.selections.length > 0 &&
+      mentee.selections.every((selection) => selection.status === "REJECTED")
+  );
+  const fullyRejectedCount = fullyRejectedMentees.length;
 
   const mentorAllocationGroups = Array.from(
     allocations
@@ -184,15 +194,18 @@ export default async function AdminPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <StatCardLink title="Mentors" value={mentorsCount} href="#all-mentors" />
           <StatCardLink title="Mentees" value={menteesCount} href="#all-mentees" />
           <StatCard title="Total Spots" value={totalSpots} />
-          <StatCard title="Filled Spots" value={filledSpots} />
-          <StatCardLink title="All Requests" value={selectionsCount} href="#requests-by-mentor" />
-          <StatCard title="Accepted" value={acceptedCount} />
-          <StatCard title="Pending" value={pendingCount} />
-          <StatCard title="Rejected" value={rejectedCount} />
+          <StatCardLink title="Filled Spots" value={filledSpots} href="#allocated-mentees" />
+          <StatCardLink title="Pending" value={pendingCount} href="#requests-by-mentor" />
+          <StatCardLink
+            title="Rejected"
+            value={fullyRejectedCount}
+            href="#fully-rejected-mentees"
+            description="Rejected by all mentors"
+          />
         </div>
 
         <Card className="border shadow-sm mb-8">
@@ -204,7 +217,7 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
 
-        <Card className="border shadow-sm mb-8">
+        <Card id="allocated-mentees" className="border shadow-sm mb-8 scroll-mt-24">
           <CardHeader>
             <CardTitle>Allocated Mentees by Mentor</CardTitle>
           </CardHeader>
@@ -249,6 +262,49 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
 
+        <Card id="fully-rejected-mentees" className="border shadow-sm mb-8 scroll-mt-24">
+          <CardHeader>
+            <CardTitle>Rejected by All Mentors</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {fullyRejectedMentees.length === 0 ? (
+              <p className="text-muted-foreground">No mentees have been rejected by all mentors.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="py-3 pr-4 font-semibold">Name</th>
+                      <th className="py-3 pr-4 font-semibold">Email</th>
+                      <th className="py-3 pr-4 font-semibold">Index Number</th>
+                      <th className="py-3 pr-4 font-semibold">Batch</th>
+                      <th className="py-3 pr-4 font-semibold">Rejected Requests</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fullyRejectedMentees.map((mentee) => (
+                      <tr key={mentee.id} className="border-b last:border-b-0">
+                        <td className="py-3 pr-4 font-medium">
+                          <Link
+                            href={`/admin/mentees/${mentee.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {mentee.user.name || "Unknown"}
+                          </Link>
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">{mentee.user.email}</td>
+                        <td className="py-3 pr-4">{mentee.indexNumber || "-"}</td>
+                        <td className="py-3 pr-4">{mentee.batch || "-"}</td>
+                        <td className="py-3 pr-4">{mentee.selections.length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card id="requests-by-mentor" className="border shadow-sm mb-8 scroll-mt-24">
           <CardHeader>
             <CardTitle>Requests by Mentor</CardTitle>
@@ -286,6 +342,7 @@ export default async function AdminPage() {
                               <th className="py-3 pr-4 font-semibold">Preference</th>
                               <th className="py-3 pr-4 font-semibold">Status</th>
                               <th className="py-3 pr-4 font-semibold">Requested On</th>
+                              <th className="py-3 pr-4 font-semibold">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -308,6 +365,13 @@ export default async function AdminPage() {
                                 </td>
                                 <td className="py-3 pr-4 text-muted-foreground">
                                   {allocationDateFormatter.format(new Date(request.createdAt))}
+                                </td>
+                                <td className="py-3 pr-4">
+                                  <AdminRejectRequestButton
+                                    selectionId={request.id}
+                                    menteeLabel={request.mentee.user.name || request.mentee.user.email}
+                                    disabled={request.status === "REJECTED"}
+                                  />
                                 </td>
                               </tr>
                             ))}
@@ -474,7 +538,15 @@ export default async function AdminPage() {
   );
 }
 
-function StatCard({ title, value }: { title: string; value: number }) {
+function StatCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: number;
+  description?: string;
+}) {
   return (
     <Card className="border shadow-sm">
       <CardHeader className="pb-2">
@@ -482,12 +554,25 @@ function StatCard({ title, value }: { title: string; value: number }) {
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
+        {description ? (
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-function StatCardLink({ title, value, href }: { title: string; value: number; href: string }) {
+function StatCardLink({
+  title,
+  value,
+  href,
+  description,
+}: {
+  title: string;
+  value: number;
+  href: string;
+  description?: string;
+}) {
   return (
     <Link href={href} className="block">
       <Card className="border shadow-sm transition hover:shadow-md hover:border-primary/30">
@@ -496,6 +581,9 @@ function StatCardLink({ title, value, href }: { title: string; value: number; hr
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">{value}</div>
+          {description ? (
+            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          ) : null}
         </CardContent>
       </Card>
     </Link>

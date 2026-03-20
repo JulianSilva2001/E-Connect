@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, Linkedin, Github, Globe, FileText, Mail } from "lucide-react";
+import { ChevronDown, ChevronUp, Linkedin, Github, Globe, FileText, Mail, Phone } from "lucide-react";
 import { useState } from "react";
 
 interface AcceptedMenteeCardProps {
@@ -11,6 +11,8 @@ interface AcceptedMenteeCardProps {
         id: string;
         name: string;
         email: string;
+        indexNumber?: string | null;
+        contactNumber?: string | null;
         batch: string;
         interests: string[];
         bio?: string;
@@ -46,6 +48,14 @@ export function AcceptedMenteeCard({ mentee }: AcceptedMenteeCardProps) {
                         <span className="text-muted-foreground">Batch:</span>
                         <span className="font-medium">{mentee.batch}</span>
                     </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Index Number:</span>
+                        <span className="font-medium">{mentee.indexNumber || "-"}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Contact Number:</span>
+                        <span className="font-medium">{mentee.contactNumber || "-"}</span>
+                    </div>
                     <div className="flex flex-wrap gap-2 mt-2">
                         {mentee.interests.map((i: string) => (
                             <Badge key={i} variant="secondary" className="text-xs">{i}</Badge>
@@ -76,11 +86,35 @@ export function AcceptedMenteeCard({ mentee }: AcceptedMenteeCardProps) {
                             </div>
                         )}
 
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="text-sm">
+                                <span className="font-semibold block text-foreground">Email:</span>
+                                <p className="text-muted-foreground break-all">{mentee.email}</p>
+                            </div>
+                            <div className="text-sm">
+                                <span className="font-semibold block text-foreground">Contact Number:</span>
+                                <p className="text-muted-foreground">{mentee.contactNumber || "-"}</p>
+                            </div>
+                            <div className="text-sm">
+                                <span className="font-semibold block text-foreground">Batch:</span>
+                                <p className="text-muted-foreground">{mentee.batch || "-"}</p>
+                            </div>
+                            <div className="text-sm">
+                                <span className="font-semibold block text-foreground">Index Number:</span>
+                                <p className="text-muted-foreground">{mentee.indexNumber || "-"}</p>
+                            </div>
+                        </div>
+
                         {/* Links Section */}
                         <div className="flex flex-wrap gap-3 pt-2">
                             <a href={`mailto:${mentee.email}`} className="text-xs flex items-center gap-1 text-primary hover:underline">
                                 <Mail className="h-3 w-3" /> Email
                             </a>
+                            {mentee.contactNumber && (
+                                <a href={`tel:${mentee.contactNumber}`} className="text-xs flex items-center gap-1 text-emerald-600 hover:underline">
+                                    <Phone className="h-3 w-3" /> Call
+                                </a>
+                            )}
                             {mentee.linkedin && (
                                 <a href={mentee.linkedin} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1 text-blue-600 hover:underline">
                                     <Linkedin className="h-3 w-3" /> LinkedIn
@@ -106,9 +140,16 @@ export function AcceptedMenteeCard({ mentee }: AcceptedMenteeCardProps) {
                 )}
             </CardContent>
             <CardFooter>
-                <Button variant="outline" className="w-full" asChild>
-                    <a href={`mailto:${mentee.email}`}>Contact Student</a>
-                </Button>
+                <div className="grid w-full gap-2 sm:grid-cols-2">
+                    <Button variant="outline" className="w-full" asChild>
+                        <a href={`mailto:${mentee.email}`}>Email Student</a>
+                    </Button>
+                    {mentee.contactNumber ? (
+                        <Button variant="outline" className="w-full" asChild>
+                            <a href={`tel:${mentee.contactNumber}`}>Call Student</a>
+                        </Button>
+                    ) : null}
+                </div>
             </CardFooter>
         </Card>
     );
