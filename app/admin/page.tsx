@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { AdminDeleteUserButton } from "@/components/admin-delete-user-button";
 import { AdminRejectRequestButton } from "@/components/admin-reject-request-button";
+import { AdminAcceptRequestButton } from "@/components/admin-accept-request-button";
+import { AdminMentorSpotsForm } from "@/components/admin-mentor-spots-form";
 import { AdminRegistrationBatchesForm } from "@/components/admin-registration-batches-form";
 import { getAllowedMenteeBatches } from "@/lib/registration-batches";
 
@@ -33,7 +35,61 @@ function isMentorReceivedRequest(selection: {
   return higherRankedSelections.every((item) => item.status === "REJECTED");
 }
 
-export default async function AdminPage() {
+type MenteeStatusFilter = "all" | "accepted" | "rejected" | "pending";
+
+function getMenteeStatusFlags(mentee: {
+  preferencesSubmitted: boolean;
+  selections: Array<{ status: "PENDING" | "ACCEPTED" | "REJECTED" }>;
+}) {
+  const hasAccepted = mentee.selections.some((selection) => selection.status === "ACCEPTED");
+  const hasPending = mentee.selections.some((selection) => selection.status === "PENDING");
+  const isRejected =
+    mentee.preferencesSubmitted &&
+    mentee.selections.length > 0 &&
+    mentee.selections.every((selection) => selection.status === "REJECTED");
+
+  return { hasAccepted, hasPending, isRejected };
+}
+
+function isTransientDbError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("Connection pool") ||
+    message.includes("timed out") ||
+    message.includes("forcibly closed") ||
+    message.includes("RetryableWriteError") ||
+    message.includes("Raw query failed")
+  );
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withDbRetry<T>(operation: () => Promise<T>, retries = 2): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries || !isTransientDbError(error)) {
+        throw error;
+      }
+
+      await sleep(250 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
+}
+
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ menteeStatus?: string | string[] }>;
+}) {
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -44,17 +100,25 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const menteeStatusParam = Array.isArray(resolvedSearchParams?.menteeStatus)
+    ? resolvedSearchParams?.menteeStatus[0]
+    : resolvedSearchParams?.menteeStatus;
+  const menteeStatusFilter: MenteeStatusFilter =
+    menteeStatusParam === "accepted" ||
+    menteeStatusParam === "rejected" ||
+    menteeStatusParam === "pending"
+      ? menteeStatusParam
+      : "all";
+
   const [
-    mentorsCount,
-    menteesCount,
     allocations,
     mentors,
     mentees,
     allowedMenteeBatches,
   ] = await Promise.all([
-    db.mentorProfile.count(),
-    db.menteeProfile.count(),
-    db.selection.findMany({
+    withDbRetry(() =>
+      db.selection.findMany({
       orderBy: { createdAt: "desc" },
       include: {
         mentor: {
@@ -86,8 +150,10 @@ export default async function AdminPage() {
           },
         },
       },
-    }),
-    db.mentorProfile.findMany({
+      })
+    ),
+    withDbRetry(() =>
+      db.mentorProfile.findMany({
       include: {
         user: {
           select: {
@@ -97,8 +163,10 @@ export default async function AdminPage() {
           },
         },
       },
-    }),
-    db.menteeProfile.findMany({
+      })
+    ),
+    withDbRetry(() =>
+      db.menteeProfile.findMany({
       include: {
         user: {
           select: {
@@ -110,12 +178,16 @@ export default async function AdminPage() {
         selections: {
           select: {
             status: true,
+            mentorId: true,
           },
         },
       },
-    }),
+      })
+    ),
     getAllowedMenteeBatches(),
   ]);
+  const mentorsCount = mentors.length;
+  const menteesCount = mentees.length;
 
   const pendingCount = allocations.filter(
     (item) => item.status === "PENDING" && isMentorReceivedRequest(item)
@@ -128,6 +200,14 @@ export default async function AdminPage() {
       mentee.selections.every((selection) => selection.status === "REJECTED")
   );
   const fullyRejectedCount = fullyRejectedMentees.length;
+  const filteredMentees = mentees.filter((mentee) => {
+    const { hasAccepted, hasPending, isRejected } = getMenteeStatusFlags(mentee);
+
+    if (menteeStatusFilter === "accepted") return hasAccepted;
+    if (menteeStatusFilter === "rejected") return isRejected;
+    if (menteeStatusFilter === "pending") return hasPending;
+    return true;
+  });
 
   const mentorAllocationGroups = Array.from(
     allocations
@@ -135,6 +215,7 @@ export default async function AdminPage() {
       .reduce((acc, item) => {
         const key = item.mentor.user.id;
         const current = acc.get(key) ?? {
+          mentorId: item.mentor.id,
           mentorName: item.mentor.user.name || "Unknown",
           mentorEmail: item.mentor.user.email,
           mentees: [] as Array<{
@@ -157,6 +238,7 @@ export default async function AdminPage() {
         acc.set(key, current);
         return acc;
       }, new Map<string, {
+        mentorId: string;
         mentorName: string;
         mentorEmail: string;
         mentees: Array<{ id: string; name: string; email: string; rank: number; createdAt: Date }>;
@@ -181,6 +263,9 @@ export default async function AdminPage() {
 
   const totalSpots = mentors.reduce((sum, mentor) => sum + (mentor.preferredMentees || 0), 0);
   const filledSpots = acceptedCount;
+  const mentorNameById = new Map(
+    mentors.map((mentor) => [mentor.id, mentor.user.name || mentor.user.email] as const)
+  );
 
   return (
     <div className="min-h-screen bg-neutral-50/50 flex flex-col">
@@ -200,10 +285,9 @@ export default async function AdminPage() {
           <StatCard title="Total Spots" value={totalSpots} />
           <StatCardLink title="Filled Spots" value={filledSpots} href="#allocated-mentees" />
           <StatCardLink title="Pending" value={pendingCount} href="#requests-by-mentor" />
-          <StatCardLink
+          <StatCard
             title="Rejected"
             value={fullyRejectedCount}
-            href="#fully-rejected-mentees"
             description="Rejected by all mentors"
           />
         </div>
@@ -230,7 +314,12 @@ export default async function AdminPage() {
                   <div key={group.mentorEmail} className="rounded-xl border bg-white p-4">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div>
-                        <h3 className="font-semibold">{group.mentorName}</h3>
+                        <Link
+                          href={`/admin/mentors/${group.mentorId}`}
+                          className="font-semibold text-primary hover:underline"
+                        >
+                          {group.mentorName}
+                        </Link>
                         <p className="text-xs text-muted-foreground">{group.mentorEmail}</p>
                       </div>
                       <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
@@ -262,49 +351,6 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
 
-        <Card id="fully-rejected-mentees" className="border shadow-sm mb-8 scroll-mt-24">
-          <CardHeader>
-            <CardTitle>Rejected by All Mentors</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {fullyRejectedMentees.length === 0 ? (
-              <p className="text-muted-foreground">No mentees have been rejected by all mentors.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="py-3 pr-4 font-semibold">Name</th>
-                      <th className="py-3 pr-4 font-semibold">Email</th>
-                      <th className="py-3 pr-4 font-semibold">Index Number</th>
-                      <th className="py-3 pr-4 font-semibold">Batch</th>
-                      <th className="py-3 pr-4 font-semibold">Rejected Requests</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fullyRejectedMentees.map((mentee) => (
-                      <tr key={mentee.id} className="border-b last:border-b-0">
-                        <td className="py-3 pr-4 font-medium">
-                          <Link
-                            href={`/admin/mentees/${mentee.id}`}
-                            className="text-primary hover:underline"
-                          >
-                            {mentee.user.name || "Unknown"}
-                          </Link>
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">{mentee.user.email}</td>
-                        <td className="py-3 pr-4">{mentee.indexNumber || "-"}</td>
-                        <td className="py-3 pr-4">{mentee.batch || "-"}</td>
-                        <td className="py-3 pr-4">{mentee.selections.length}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         <Card id="requests-by-mentor" className="border shadow-sm mb-8 scroll-mt-24">
           <CardHeader>
             <CardTitle>Requests by Mentor</CardTitle>
@@ -318,7 +364,12 @@ export default async function AdminPage() {
                   <div key={group.id} className="rounded-xl border bg-white p-4">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between mb-4">
                       <div>
-                        <h3 className="font-semibold text-base">{group.mentorName}</h3>
+                        <Link
+                          href={`/admin/mentors/${group.id}`}
+                          className="font-semibold text-base text-primary hover:underline"
+                        >
+                          {group.mentorName}
+                        </Link>
                         <p className="text-sm text-muted-foreground">{group.mentorEmail}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -367,11 +418,18 @@ export default async function AdminPage() {
                                   {allocationDateFormatter.format(new Date(request.createdAt))}
                                 </td>
                                 <td className="py-3 pr-4">
-                                  <AdminRejectRequestButton
-                                    selectionId={request.id}
-                                    menteeLabel={request.mentee.user.name || request.mentee.user.email}
-                                    disabled={request.status === "REJECTED"}
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <AdminAcceptRequestButton
+                                      selectionId={request.id}
+                                      menteeLabel={request.mentee.user.name || request.mentee.user.email}
+                                      disabled={request.status === "ACCEPTED"}
+                                    />
+                                    <AdminRejectRequestButton
+                                      selectionId={request.id}
+                                      menteeLabel={request.mentee.user.name || request.mentee.user.email}
+                                      disabled={request.status === "REJECTED"}
+                                    />
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -402,18 +460,30 @@ export default async function AdminPage() {
                       <th className="py-3 pr-4 font-semibold">Email</th>
                       <th className="py-3 pr-4 font-semibold">Organization</th>
                       <th className="py-3 pr-4 font-semibold">Job Title</th>
-                      <th className="py-3 pr-4 font-semibold">Preferred Mentees</th>
+                      <th className="py-3 pr-4 font-semibold">Spots</th>
                       <th className="py-3 pr-4 font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {mentors.map((mentor) => (
                       <tr key={mentor.id} className="border-b last:border-b-0">
-                        <td className="py-3 pr-4 font-medium">{mentor.user.name || "Unknown"}</td>
+                        <td className="py-3 pr-4 font-medium">
+                          <Link
+                            href={`/admin/mentors/${mentor.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {mentor.user.name || "Unknown"}
+                          </Link>
+                        </td>
                         <td className="py-3 pr-4 text-muted-foreground">{mentor.user.email}</td>
                         <td className="py-3 pr-4">{mentor.organization || "-"}</td>
                         <td className="py-3 pr-4">{mentor.jobTitle || "-"}</td>
-                        <td className="py-3 pr-4">{mentor.preferredMentees}</td>
+                        <td className="py-3 pr-4">
+                          <AdminMentorSpotsForm
+                            mentorId={mentor.id}
+                            initialSpots={mentor.preferredMentees || 1}
+                          />
+                        </td>
                         <td className="py-3 pr-4">
                           <AdminDeleteUserButton
                             userId={mentor.user.id}
@@ -437,43 +507,90 @@ export default async function AdminPage() {
             {mentees.length === 0 ? (
               <p className="text-muted-foreground">No mentees found.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="py-3 pr-4 font-semibold">Name</th>
-                      <th className="py-3 pr-4 font-semibold">Email</th>
-                      <th className="py-3 pr-4 font-semibold">Index Number</th>
-                      <th className="py-3 pr-4 font-semibold">Batch</th>
-                      <th className="py-3 pr-4 font-semibold">Interests</th>
-                      <th className="py-3 pr-4 font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mentees.map((mentee) => (
-                      <tr key={mentee.id} className="border-b last:border-b-0">
-                        <td className="py-3 pr-4 font-medium">
-                          <Link
-                            href={`/admin/mentees/${mentee.id}`}
-                            className="text-primary hover:underline"
-                          >
-                            {mentee.user.name || "Unknown"}
-                          </Link>
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">{mentee.user.email}</td>
-                        <td className="py-3 pr-4">{mentee.indexNumber || "-"}</td>
-                        <td className="py-3 pr-4">{mentee.batch || "-"}</td>
-                        <td className="py-3 pr-4">{mentee.interests.length ? mentee.interests.join(", ") : "-"}</td>
-                        <td className="py-3 pr-4">
-                          <AdminDeleteUserButton
-                            userId={mentee.user.id}
-                            label={mentee.user.name || mentee.user.email}
-                          />
-                        </td>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <MenteeFilterLink
+                    label="All"
+                    href="/admin?menteeStatus=all#all-mentees"
+                    count={mentees.length}
+                    active={menteeStatusFilter === "all"}
+                  />
+                  <MenteeFilterLink
+                    label="Accepted"
+                    href="/admin?menteeStatus=accepted#all-mentees"
+                    count={mentees.filter((mentee) => getMenteeStatusFlags(mentee).hasAccepted).length}
+                    active={menteeStatusFilter === "accepted"}
+                  />
+                  <MenteeFilterLink
+                    label="Rejected"
+                    href="/admin?menteeStatus=rejected#all-mentees"
+                    count={mentees.filter((mentee) => getMenteeStatusFlags(mentee).isRejected).length}
+                    active={menteeStatusFilter === "rejected"}
+                  />
+                  <MenteeFilterLink
+                    label="Pending Requests"
+                    href="/admin?menteeStatus=pending#all-mentees"
+                    count={mentees.filter((mentee) => getMenteeStatusFlags(mentee).hasPending).length}
+                    active={menteeStatusFilter === "pending"}
+                  />
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="py-3 pr-4 font-semibold">Name</th>
+                        <th className="py-3 pr-4 font-semibold">Email</th>
+                        <th className="py-3 pr-4 font-semibold">Contact Number</th>
+                        <th className="py-3 pr-4 font-semibold">Index Number</th>
+                        <th className="py-3 pr-4 font-semibold">Batch</th>
+                        <th className="py-3 pr-4 font-semibold">Assigned Mentor(s)</th>
+                        <th className="py-3 pr-4 font-semibold">Interests</th>
+                        <th className="py-3 pr-4 font-semibold">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {filteredMentees.map((mentee) => {
+                        const assignedMentors = mentee.selections
+                          .filter((selection) => selection.status === "ACCEPTED")
+                          .map((selection) => mentorNameById.get(selection.mentorId) || "Unknown");
+
+                        return (
+                          <tr key={mentee.id} className="border-b last:border-b-0">
+                            <td className="py-3 pr-4 font-medium">
+                              <Link
+                                href={`/admin/mentees/${mentee.id}`}
+                                className="text-primary hover:underline"
+                              >
+                                {mentee.user.name || "Unknown"}
+                              </Link>
+                            </td>
+                            <td className="py-3 pr-4 text-muted-foreground">{mentee.user.email}</td>
+                            <td className="py-3 pr-4">{mentee.contactNumber || "-"}</td>
+                            <td className="py-3 pr-4">{mentee.indexNumber || "-"}</td>
+                            <td className="py-3 pr-4">{mentee.batch || "-"}</td>
+                            <td className="py-3 pr-4">
+                              {assignedMentors.length ? assignedMentors.join(", ") : "-"}
+                            </td>
+                            <td className="py-3 pr-4">
+                              {mentee.interests.length ? mentee.interests.join(", ") : "-"}
+                            </td>
+                            <td className="py-3 pr-4">
+                              <AdminDeleteUserButton
+                                userId={mentee.user.id}
+                                label={mentee.user.name || mentee.user.email}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {filteredMentees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No mentees match this filter.</p>
+                ) : null}
               </div>
             )}
           </CardContent>
@@ -598,4 +715,32 @@ function StatusBadge({ status }: { status: "PENDING" | "ACCEPTED" | "REJECTED" }
     return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Rejected</Badge>;
   }
   return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Pending</Badge>;
+}
+
+function MenteeFilterLink({
+  label,
+  href,
+  count,
+  active,
+}: {
+  label: string;
+  href: string;
+  count: number;
+  active: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition ${
+        active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+      }`}
+    >
+      <span>{label}</span>
+      <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+        {count}
+      </Badge>
+    </Link>
+  );
 }

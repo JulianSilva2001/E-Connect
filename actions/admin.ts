@@ -8,6 +8,7 @@ import { isAdminEmail } from '@/lib/admin';
 import { revalidatePath } from 'next/cache';
 import { normalizeBatchList } from '@/lib/registration-batches';
 import {
+    autoRejectActionablePendingSelectionsForFullMentor,
     findNextActionableSelectionId,
     notifyMenteeAllRejected,
     notifyMentorForActionableSelection,
@@ -167,5 +168,107 @@ export async function adminRejectMentorshipRequest(selectionId: string) {
     } catch (error) {
         console.error('Failed to reject mentorship request:', error);
         return { error: 'Failed to reject request.' };
+    }
+}
+
+export async function adminAcceptMentorshipRequest(selectionId: string) {
+    const session = await auth();
+
+    if (!session?.user?.email || !isAdminEmail(session.user.email)) {
+        return { error: 'Unauthorized' };
+    }
+
+    const selection = await db.selection.findUnique({
+        where: { id: selectionId },
+        include: {
+            mentor: true,
+        },
+    });
+
+    if (!selection) {
+        return { error: 'Request not found.' };
+    }
+
+    try {
+        let mentorCapacity = selection.mentor.preferredMentees || 0;
+
+        // Keep behavior consistent with mentor-side acceptance flow for legacy records.
+        if (mentorCapacity === 0) {
+            await db.mentorProfile.update({
+                where: { id: selection.mentorId },
+                data: { preferredMentees: 5 },
+            });
+            mentorCapacity = 5;
+        }
+
+        const acceptedCount = await db.selection.count({
+            where: {
+                mentorId: selection.mentorId,
+                status: SelectionStatus.ACCEPTED,
+            },
+        });
+
+        if (acceptedCount >= mentorCapacity) {
+            return { error: 'Capacity full. Increase spots or reject another accepted request first.' };
+        }
+
+        await db.selection.update({
+            where: { id: selectionId },
+            data: {
+                status: SelectionStatus.ACCEPTED,
+                rejectionNote: null,
+            },
+        });
+
+        await autoRejectActionablePendingSelectionsForFullMentor(selection.mentorId);
+
+        revalidatePath('/admin');
+        revalidatePath('/dashboard');
+        return { success: 'Request accepted.' };
+    } catch (error) {
+        console.error('Failed to accept mentorship request:', error);
+        return { error: 'Failed to accept request.' };
+    }
+}
+
+export async function updateMentorSpots(mentorId: string, rawSpots: number) {
+    const session = await auth();
+
+    if (!session?.user?.email || !isAdminEmail(session.user.email)) {
+        return { error: 'Unauthorized' };
+    }
+
+    const spots = Number(rawSpots);
+    if (!Number.isFinite(spots) || !Number.isInteger(spots)) {
+        return { error: 'Spots must be a whole number.' };
+    }
+
+    if (spots < 1 || spots > 50) {
+        return { error: 'Spots must be between 1 and 50.' };
+    }
+
+    try {
+        const mentor = await db.mentorProfile.findUnique({
+            where: { id: mentorId },
+            select: { id: true },
+        });
+
+        if (!mentor) {
+            return { error: 'Mentor not found.' };
+        }
+
+        await db.mentorProfile.update({
+            where: { id: mentorId },
+            data: { preferredMentees: spots },
+        });
+
+        await autoRejectActionablePendingSelectionsForFullMentor(mentorId);
+
+        revalidatePath('/admin');
+        revalidatePath('/dashboard');
+        return { success: 'Mentor spots updated.' };
+    } catch (error) {
+        console.error('Failed to update mentor spots:', error);
+        return { error: 'Failed to update mentor spots.' };
     }
 }
