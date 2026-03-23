@@ -547,6 +547,108 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
     }
 }
 
+export async function mentorAcceptMenteeWithoutRequest(menteeId: string) {
+    const session = await auth();
+    if (!session?.user?.email) return { error: "Not authenticated" };
+
+    const user = await db.user.findUnique({
+        where: { email: session.user.email },
+        include: { mentorProfile: true }
+    });
+
+    if (!user || user.role !== 'MENTOR' || !user.mentorProfile) {
+        return { error: "Unauthorized: You do not have a mentor profile." };
+    }
+
+    try {
+        if (user.mentorProfile.preferredMentees === 0) {
+            await db.mentorProfile.update({
+                where: { id: user.mentorProfile.id },
+                data: { preferredMentees: 5 }
+            });
+            user.mentorProfile.preferredMentees = 5;
+        }
+
+        const acceptedCount = await db.selection.count({
+            where: {
+                mentorId: user.mentorProfile.id,
+                status: SelectionStatus.ACCEPTED
+            }
+        });
+
+        if (acceptedCount >= user.mentorProfile.preferredMentees) {
+            return { error: "Capacity full. Cannot accept more mentees." };
+        }
+
+        const mentee = await db.menteeProfile.findUnique({
+            where: { id: menteeId },
+            include: {
+                selections: true
+            }
+        });
+
+        if (!mentee) {
+            return { error: "Mentee not found." };
+        }
+
+        const existingAccepted = mentee.selections.find((selection) => selection.status === SelectionStatus.ACCEPTED);
+        if (existingAccepted) {
+            return { error: "This mentee already has a mentor." };
+        }
+
+        const existingSelectionForMentor = mentee.selections.find(
+            (selection) => selection.mentorId === user.mentorProfile!.id
+        );
+
+        await db.$transaction(async (tx) => {
+            let acceptedSelectionId = existingSelectionForMentor?.id;
+
+            if (existingSelectionForMentor) {
+                await tx.selection.update({
+                    where: { id: existingSelectionForMentor.id },
+                    data: {
+                        status: SelectionStatus.ACCEPTED,
+                        rejectionNote: null
+                    }
+                });
+            } else {
+                const highestRank = mentee.selections.reduce((max, selection) => Math.max(max, selection.rank), 0);
+                const created = await tx.selection.create({
+                    data: {
+                        menteeId: mentee.id,
+                        mentorId: user.mentorProfile!.id,
+                        rank: highestRank + 1,
+                        status: SelectionStatus.ACCEPTED,
+                        rejectionNote: null
+                    }
+                });
+                acceptedSelectionId = created.id;
+            }
+
+            await tx.selection.updateMany({
+                where: {
+                    menteeId: mentee.id,
+                    id: { not: acceptedSelectionId },
+                    status: SelectionStatus.PENDING
+                },
+                data: {
+                    status: SelectionStatus.REJECTED,
+                    rejectionNote: "Closed because the mentee was accepted by another mentor."
+                }
+            });
+        });
+
+        await autoRejectActionablePendingSelectionsForFullMentor(user.mentorProfile.id);
+
+        revalidatePath('/dashboard');
+        revalidatePath(`/mentee-profiles/${menteeId}`);
+        return { success: "Mentee accepted." };
+    } catch (e: any) {
+        console.error(e);
+        return { error: `Error: ${e.message || "Operation failed"}` };
+    }
+}
+
 export async function getAcceptedMentees() {
     const session = await auth();
     if (!session?.user?.email) return [];

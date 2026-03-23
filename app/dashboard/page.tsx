@@ -11,7 +11,6 @@ import { AcceptedMentorCard } from "@/components/accepted-mentor-card";
 import { FeedbackSection } from "@/components/feedback-section";
 import { getMentors, getMentorRequests, processMentorshipRequest, getAcceptedMentees, getAcceptedMentors } from "@/actions/mentorship";
 import { hasAcceptedSession, getGeneralFeedbacks, getMentorAboutMenteeFeedbacks, getMenteeAboutMentorFeedbacks, getAcceptedMentorsForMentee, getAcceptedMenteesForMentor } from "@/actions/feedback";
-import { User, MenteeProfile } from "@prisma/client";
 import { Target, BookOpen, Clock, Lightbulb, Briefcase, Users, CheckCircle2, Check, X, MessageSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { ProfileEditor } from "@/components/profile-editor";
 import { ConfirmMentorPreferencesButton } from "@/components/confirm-mentor-preferences-button";
 import { MentorPreferenceOrderEditor } from "@/components/mentor-preference-order-editor";
+import { MentorMenteeDirectory } from "@/components/mentor-mentee-directory";
 
 export default async function DashboardPage() {
     const session = await auth();
@@ -75,14 +75,80 @@ export default async function DashboardPage() {
     }
     // Fetch data based on role
     let allMentors = [];
-    let allMentees: (User & { menteeProfile: MenteeProfile | null })[] = [];
+    let mentorVisibleMentees: Array<{
+        id: string;
+        name: string;
+        email: string;
+        batch?: string | null;
+        indexNumber?: string | null;
+        contactNumber?: string | null;
+        interests: string[];
+        bio?: string | null;
+        motivation?: string | null;
+        goal?: string | null;
+        portfolio?: string | null;
+        cvLink?: string | null;
+        github?: string | null;
+        linkedin?: string | null;
+        assignedMentorName: string | null;
+        selectedThisMentor: boolean;
+    }> = [];
 
     // Always fetch mentors for both roles (Mentors want to see other mentors, Mentees need to select)
     allMentors = await getMentors({ includeUnavailable: true });
 
     if (user.role === 'MENTOR') {
-        // We might still want mentees for "My Mentees" later, but for now user said "show other mentors instead of students"
-        // keeping the "My Mentees" tab placeholder logic for now but the "Browse" part changes.
+        const mentees = await db.menteeProfile.findMany({
+            include: {
+                user: {
+                    select: {
+                        name: true,
+                        email: true,
+                    }
+                },
+                selections: {
+                    orderBy: { rank: "asc" },
+                    include: {
+                        mentor: {
+                            include: {
+                                user: {
+                                    select: {
+                                        name: true,
+                                        email: true,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        mentorVisibleMentees = mentees
+            .map((mentee) => ({
+                id: mentee.id,
+                name: mentee.user.name || "Unknown",
+                email: mentee.user.email,
+                batch: mentee.batch,
+                indexNumber: mentee.indexNumber,
+                contactNumber: mentee.contactNumber,
+                interests: mentee.interests,
+                bio: mentee.bio,
+                motivation: mentee.motivation,
+                goal: mentee.goal,
+                portfolio: mentee.portfolio,
+                cvLink: mentee.cvLink,
+                github: mentee.github,
+                linkedin: mentee.linkedin,
+                assignedMentorName:
+                    mentee.selections.find((selection) => selection.status === "ACCEPTED")?.mentor.user.name ||
+                    mentee.selections.find((selection) => selection.status === "ACCEPTED")?.mentor.user.email ||
+                    null,
+                selectedThisMentor: mentee.selections.some(
+                    (selection) => selection.mentorId === user.mentorProfile?.id
+                ),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
     }
 
     const mentorRequests = user.role === 'MENTOR' ? await getMentorRequests() : [];
@@ -178,6 +244,12 @@ export default async function DashboardPage() {
                                     className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
                                 >
                                     Other Mentors
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="browse-mentees"
+                                    className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 py-2 transition-all"
+                                >
+                                    Browse Mentees
                                 </TabsTrigger>
                             </>
                         )}
@@ -546,6 +618,15 @@ export default async function DashboardPage() {
                                         </div>
                                     )}
                                 </div>
+                            </TabsContent>
+                            <TabsContent value="browse-mentees" className="mt-6">
+                                <div className="mb-6">
+                                    <h2 className="text-xl font-semibold mb-2">Mentee Profiles</h2>
+                                    <p className="text-muted-foreground">
+                                        Search mentees by name and view their profile details.
+                                    </p>
+                                </div>
+                                <MentorMenteeDirectory mentees={mentorVisibleMentees} />
                             </TabsContent>
                         </>
                     )}
