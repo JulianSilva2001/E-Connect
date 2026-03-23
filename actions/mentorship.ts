@@ -510,8 +510,13 @@ export async function processMentorshipRequest(selectionId: string, action: "ACC
             console.log(`[DEBUG] Mentor: ${user.name}, Capacity: ${user.mentorProfile.preferredMentees}, Accepted: ${acceptedCount}`);
 
             if (acceptedCount >= user.mentorProfile.preferredMentees) {
-                console.log(`[DEBUG] Capacity Full!`);
-                return { error: "Capacity full. Cannot accept more mentees." };
+                const nextCapacity = acceptedCount + 1;
+                await db.mentorProfile.update({
+                    where: { id: user.mentorProfile.id },
+                    data: { preferredMentees: nextCapacity }
+                });
+                user.mentorProfile.preferredMentees = nextCapacity;
+                console.log(`[DEBUG] Capacity auto-increased to ${nextCapacity}`);
             }
 
             // Verify mentee hasn't been accepted elsewhere? 
@@ -577,7 +582,12 @@ export async function mentorAcceptMenteeWithoutRequest(menteeId: string) {
         });
 
         if (acceptedCount >= user.mentorProfile.preferredMentees) {
-            return { error: "Capacity full. Cannot accept more mentees." };
+            const nextCapacity = acceptedCount + 1;
+            await db.mentorProfile.update({
+                where: { id: user.mentorProfile.id },
+                data: { preferredMentees: nextCapacity }
+            });
+            user.mentorProfile.preferredMentees = nextCapacity;
         }
 
         const mentee = await db.menteeProfile.findUnique({
