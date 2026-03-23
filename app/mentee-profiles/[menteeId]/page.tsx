@@ -7,7 +7,6 @@ import { Footer } from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MentorAcceptRequestButton } from "@/components/mentor-accept-request-button";
-import { MentorDirectAcceptButton } from "@/components/mentor-direct-accept-button";
 import { isActionableSelection } from "@/lib/mentor-request-capacity";
 
 export default async function MenteeProfilePage({
@@ -72,12 +71,14 @@ export default async function MenteeProfilePage({
     mentee.selections[0]?.mentor.user.name || mentee.selections[0]?.mentor.user.email || "No mentor yet";
 
   let actionableSelectionId: string | null = null;
+  let requestedSelectionId: string | null = null;
   if (viewer?.role === "MENTOR" && viewer.mentorProfile?.id) {
-    const pendingSelection = await db.selection.findFirst({
+    const mentorSelection = await db.selection.findUnique({
       where: {
-        menteeId,
-        mentorId: viewer.mentorProfile.id,
-        status: "PENDING",
+        menteeId_mentorId: {
+          menteeId,
+          mentorId: viewer.mentorProfile.id,
+        },
       },
       include: {
         mentee: {
@@ -94,14 +95,19 @@ export default async function MenteeProfilePage({
       },
     });
 
+    if (mentorSelection && (mentorSelection.status === "PENDING" || mentorSelection.status === "REJECTED")) {
+      requestedSelectionId = mentorSelection.id;
+    }
+
     if (
-      pendingSelection &&
+      mentorSelection &&
+      mentorSelection.status === "PENDING" &&
       isActionableSelection({
-        rank: pendingSelection.rank,
-        mentee: pendingSelection.mentee,
+        rank: mentorSelection.rank,
+        mentee: mentorSelection.mentee,
       })
     ) {
-      actionableSelectionId = pendingSelection.id;
+      actionableSelectionId = mentorSelection.id;
     }
   }
 
@@ -129,9 +135,9 @@ export default async function MenteeProfilePage({
           <div className="mb-6">
             <MentorAcceptRequestButton selectionId={actionableSelectionId} />
           </div>
-        ) : viewer?.role === "MENTOR" && mentorName === "No mentor yet" ? (
+        ) : requestedSelectionId && mentorName === "No mentor yet" ? (
           <div className="mb-6">
-            <MentorDirectAcceptButton menteeId={mentee.id} />
+            <MentorAcceptRequestButton selectionId={requestedSelectionId} />
           </div>
         ) : null}
 
